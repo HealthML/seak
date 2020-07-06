@@ -91,7 +91,7 @@ def test_full_rank_continuous():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -206,7 +206,7 @@ def test_full_rank_continuous_exclude_individuals():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -319,7 +319,7 @@ def test_full_rank_continuous_genotypes_by_id():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -336,7 +336,7 @@ def test_full_rank_continuous_genotypes_by_id():
     assert np.all((np.isclose(reference_result['p_value'], results['p_value']))), 'The last change in code changes the result!!'
 
 
-def test_full_rank_continuous__automatic_intersection():
+def test_full_rank_continuous_automatic_intersection():
     import time
 
     import numpy as np
@@ -398,7 +398,7 @@ def test_full_rank_continuous__automatic_intersection():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]

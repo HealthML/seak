@@ -5,9 +5,9 @@ from seak import kernels
 
 def test_single_column_kernel():
     V = np.asarray([[0, 1, 2, ], [0, 1, 2], [0, 1, 2]])
-    G = np.asarray([[0, 1, 2], [2, 0, 1], [1, 1, 1], [0, 1, 2], [0, 0, 2]])
+    G = np.asarray([[0, 1, 2], [2, 0, 1], [1, 1, 1], [0, 1, 2], [0, 0, 2]]) * 100.
     i = 2
-    result = kernels.phi(kernels.single_column_kernel(i), G, V)
+    result = kernels.single_column_kernel(i, False)(G, V)
     expected_result = np.asarray([[0, 200, 400],
                                   [400, 0, 200],
                                   [200, 200, 200],
@@ -19,8 +19,8 @@ def test_single_column_kernel():
 
 def test_diffscore_max_kernel():
     V = np.asarray([[0, 1, 2, ], [0, 1, 2], [0, 1, 2]])
-    G = np.asarray([[0, 1, 2], [2, 0, 1], [1, 1, 1], [0, 1, 2], [0, 0, 2]])
-    result = kernels.phi(kernels.diffscore_max, G, V)
+    G = np.asarray([[0, 1, 2], [2, 0, 1], [1, 1, 1], [0, 1, 2], [0, 0, 2]]) * 100.
+    result = kernels.diffscore_max(G, V, False)
     expected_result = np.asarray([[0, 200, 400],
                                   [400, 0, 200],
                                   [200, 200, 200],
@@ -33,5 +33,5 @@ def test_diffscore_max_kernel():
 def test_linear_kernel():
     V = np.asarray([[0, 1, 2, ], [0, 1, 2], [0, 1, 2]])
     G = np.asarray([[0, 1, 2], [2, 0, 1], [1, 1, 1], [0, 1, 2], [0, 0, 2]])
-    result = kernels.phi(kernels.linear, G, V)
+    result = kernels.linear(G, V)
     assert np.all(np.isclose(result, G))

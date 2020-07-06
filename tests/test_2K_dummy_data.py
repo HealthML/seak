@@ -106,7 +106,7 @@ def test_full_rank_continuous():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -231,7 +231,7 @@ def test_low_rank_continuous_low_rank_bg():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -362,7 +362,7 @@ def test_full_rank_continuous_precomputed_full_rank_background_kernel():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -479,7 +479,7 @@ def test_low_rank_continuous_precomputed_low_rank_background_kernel():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
@@ -567,7 +567,7 @@ def test_full_rank_continuous_automatic_intersection():
 
         V = hdf5_loader.anno_by_id(temp_vids)
 
-        GV = kernels.phi(kernels.diffscore_max, G, V)
+        GV = kernels.diffscore_max(G, V, False)
         temp_p_value = null_model.pv_alt_model(GV)
         temp_genotypes_info_dict['p_value'] = temp_p_value
         temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
