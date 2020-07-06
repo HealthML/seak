@@ -6,7 +6,7 @@ A single kernel score-based test is available for a logistic link function (bina
 
 Null model single kernel:
 
-.. math:: y = {\\alpha} X + {\epsilon}
+.. math:: y = {\\alpha} X + {\\epsilon}
 
 Alternative model single kernel:
 
@@ -82,10 +82,10 @@ class Scoretest:
         self.Neff = self.N - self.D  # unbiased estimator for variance
 
         if self.P != 1:
-            logging.ERROR('More than one phenotype given.')
+            logging.error('More than one phenotype given.')
 
         if self.X.shape[0] != self.N:
-            logging.ERROR('Number of individuals in phenotype and covariates does not match.')
+            logging.error('Number of individuals in phenotype and covariates does not match.')
 
     def _set_phenotypes(self, phenotypes):
         """Casts phenotypes to two dimensions."""
@@ -165,13 +165,13 @@ class Scoretest:
         :rtype: float
         """
         if G1.shape[0] != self.N:
-            logging.ERROR('Number of individuals in phenotype and genotypes to be tested does not match.')
+            logging.error('Number of individuals in phenotype and genotypes to be tested does not match.')
 
         if G2 is None:
             squaredform, GPG = self._score(G1)
         else:
             if G1.shape[0] != G2.shape[0]:
-                logging.ERROR('Number of individuals in G1 and G2 do not match.')
+                logging.error('Number of individuals in G1 and G2 do not match.')
             squaredform, GPG = self._score_conditional(G1, G2)
 
         pv = self._pv_davies(squaredform, GPG)
@@ -225,7 +225,12 @@ class Scoretest:
             noncentrality = np.zeros(size)
         ifault = np.zeros(1, dtype='int32')
         trace = np.zeros(7)
+
         pval = 1.0 - wrap_qfc.qf(coeffs, noncentrality, dof, sigma, chi2val, lim, acc, trace, ifault)
+
+        if ifault[0] > 0:
+            logging.warning('ifault {} encountered during p-value computation'.format(ifault[0]))
+
         return pval, ifault[0], trace
 
 
@@ -238,7 +243,7 @@ class ScoretestNoK(Scoretest):
 
     Null model single kernel:
 
-    .. math:: Y = {\\alpha} X + {\epsilon}
+    .. math:: Y = {\\alpha} X + {\\epsilon}
 
     Alternative model single kernel:
 
@@ -380,8 +385,8 @@ class ScoretestLogit(Scoretest):
     def __init__(self, phenotypes, covariates):
         super().__init__(phenotypes, covariates)
         # check if is binary
-        uniquey = sp.unique(self.Y)
-        if not sp.sort(uniquey).tolist() == [0, 1]:
+        uniquey = np.unique(self.Y)
+        if not np.sort(uniquey).tolist() == [0, 1]:
             raise Exception("must use binary data in {0,1} for logit tests, found:" + str(self.Y))
         self.pY, self.stdY, self.VX, self.pinvVX = self._compute_null_model()
 
@@ -390,7 +395,7 @@ class ScoretestLogit(Scoretest):
         logreg_mod = sm.Logit(self.Y[:, 0], self.X)
         logreg_result = logreg_mod.fit(disp=0)
         pY = logreg_result.predict(self.X)
-        stdY = sp.sqrt(pY * (1.0 - pY))
+        stdY = np.sqrt(pY * (1.0 - pY))
         VX = self.X * np.lib.stride_tricks.as_strided(stdY, (stdY.size, self.X.shape[1]), (stdY.itemsize, 0))
         pinvVX = np.linalg.pinv(VX)
         return pY, stdY, VX, pinvVX
@@ -470,7 +475,7 @@ class Scoretest2K(Scoretest):
             # K0 already computed, i.e. the full rank case, work with K0
             # compute SVD of SKS
             # see Lemma 10 in Lippert et al. 2014
-            ar = sp.arange(self.K0.shape[0])
+            ar = np.arange(self.K0.shape[0])
 
             self.K0[ar, ar] += 1.0
 
@@ -491,7 +496,7 @@ class Scoretest2K(Scoretest):
             # compute SVD of SKS
             # see Lemma 10 in Lippert et al. 2014
             # the rest is identical to the case above...
-            ar = sp.arange(self.K0.shape[0])
+            ar = np.arange(self.K0.shape[0])
             self.K0[ar, ar] += 1.0
 
             PxKPx, Xdagger = super()._linreg(Y=self.K0, X=self.X, Xdagger=Xdagger)
@@ -569,14 +574,14 @@ class Scoretest2K(Scoretest):
 
         YKY = (UYS * self.UY).sum()
 
-        logdetK = sp.log(Sd).sum()
+        logdetK = np.emath.log(Sd).sum()
 
         if (self.lowrank):  # low rank part
             YKY += self.YUUY / (1.0 - h2)
-            logdetK += sp.log(1.0 - h2) * (self.Neff * self.P - k)
+            logdetK += np.emath.log(1.0 - h2) * (self.Neff * self.P - k)
 
         sigma2 = YKY / (self.Neff * self.P)
-        nLL = 0.5 * (logdetK + self.Neff * self.P * (sp.log(2.0 * sp.pi * sigma2) + 1))
+        nLL = 0.5 * (logdetK + self.Neff * self.P * (np.emath.log(2.0 * sp.pi * sigma2) + 1))
         result = {
             'nLL': nLL,
             'sigma2': sigma2,
@@ -616,8 +621,6 @@ class Scoretest2K(Scoretest):
         else:
             GPG = SUG.dot(UG.T)
 
-        # in the original they compute expectationsqform (expected value) and varsqform (variance) fo the squared form.
-        # these were not used.
 
         if self.lowrank:
             if G1.shape[0] > G1.shape[1]:
@@ -626,6 +629,63 @@ class Scoretest2K(Scoretest):
                 GPG_lowr = UUG.dot(UUG.T) / self.sigma2e
             GPG += GPG_lowr
 
+        GPG = GPG * 0.5
+
+        # in the original they compute expectationsqform (expected value) and varsqform (variance) fo the squared form.
+        # these were not used.
+
+        return squaredform, GPG
+
+    def _score_conditional(self, G1, G2):
+        """Computes squaredform and GPG with a background kernel."""
+
+        n1 = G1.shape[1]
+
+        Gc = np.concatenate([G1, G2], axis=1)
+
+        # SG
+        RxG, Xdagger = super()._linreg(Y=Gc, X=self.X, Xdagger=self.Xdagger)
+
+        # UtSG
+        UG = self.U.T.dot(RxG)
+
+        if self.lowrank:
+            UUG = RxG - self.U.dot(UG)
+
+        # Compare to Lippert 2014, Lemma 11. Rescale eigenvalues according to mixing parameters
+        # The inverse of the diagonal matrix of eigenvalues (Lambda + delta*I) is calculated trivially:
+        Sd = 1.0 / (self.S * self.sigma2g + self.sigma2e)
+
+        # matrix multiplication of UtSG with (Lambda + delta*I)^-1, which is called Sd here
+        SUG = UG * np.lib.stride_tricks.as_strided(Sd, (Sd.size, UG.shape[1]), (Sd.itemsize, 0))
+
+        GPY = SUG.T.dot(self.UY)
+        if self.lowrank:
+            GPY += UUG.T.dot(self.UUY) / self.sigma2e
+
+        G2tPY = GPY[n1:]
+
+        GPG = SUG.T.dot(UG)
+
+        if self.lowrank:
+            GPG_lowr = UUG.T.dot(UUG) / self.sigma2e
+            GPG += GPG_lowr
+
+        G1tPG1 = GPG[0:n1, 0:n1]
+        G2tPG2 = GPG[n1:, n1:]
+        G1tPG2 = GPG[0:n1, n1:]
+        G2tPG1 = GPG[n1:, 0:n1]
+
+        # conditioning of the test statistics:
+        G1tPG2_G2tPG2inv = G1tPG2.dot(np.inv(G2tPG2))
+
+        # conditional squaredform
+        expected_teststat = G1tPG2_G2tPG2inv.dot(G2tPY)
+        G1tPY_cond = GPY[:n1] - expected_teststat
+        squaredform = 0.5 * (G1tPY_cond * G1tPY_cond).sum()
+
+        # conditional G1tPG1 -> GPG
+        GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
         GPG = GPG * 0.5
 
         return squaredform, GPG
