@@ -121,19 +121,27 @@ class VariantLoader:
         return mx.filled(np.nanmean(mx, axis=0))
 
     @staticmethod
-    def standardize(X):
-        """Z-score normalizes the genotype data, excluding missing values from computation.
+    def standardize(X, inplace=False):
+        """Z-score normalizes the genotype data, excluding missing values from computation. If inplace == True, performs
+        operations inplace and returns a reference to X itself.
 
         :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
+        ::
         :return: z-score normalized array
         :rtype: numpy.ndarray
         """
         mean = np.nanmean(X, axis=0)
         std = np.nanstd(X, axis=0)
-        return (X - mean) / std
+
+        if inplace:
+            X -= mean
+            X /= std
+            return X
+        else:
+            return (X - mean) / std
 
     @staticmethod
-    def center(X):
+    def center(X, inplace=False):
         """Mean centers genotype values, excluding missing values from computation.
 
         :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
@@ -141,10 +149,15 @@ class VariantLoader:
         :rtype: numpy.ndarray
         """
         mean = np.nanmean(X, axis=0)
-        return X - mean
+
+        if inplace:
+            X -= mean
+            return X
+        else:
+            return X - mean
 
     @staticmethod
-    def scale(X):
+    def scale(X, inplace=False):
         """Scales the genotype data by standard deviation, excluding missing values from computation.
 
         :param numpy.ndarray X: 2D array wit dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
@@ -152,7 +165,12 @@ class VariantLoader:
         :rtype: numpy.ndarray
         """
         std = np.nanstd(X, axis=0)
-        return X / std
+
+        if inplace:
+            X /= std
+            return X
+        else:
+            return X / std
 
     @staticmethod
     def preprocess_genotypes(genotypes, vids, impute_mean=True,
@@ -179,6 +197,10 @@ class VariantLoader:
         :return: filtered genotypes, index of variants that remain after filtering
         :rtype: numpy.ndarray, pandas.Index
         """
+
+        ## TODO: make more memory efficient by performing some operations inplace
+        ## potentially separate filtering from processing (?)
+
         assert not (
                 invert_encoding & recode_maf), 'Genotypes can either be completely inverted or recoded according to ' \
                                                'minor allele frequency but not both.'
