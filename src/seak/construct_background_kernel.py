@@ -176,13 +176,12 @@ class GRMLoaderSnpReader:
     In full rank case, loads the SNPs in blocks to construct the kernel.
     In low rank case, loads all SNPs into memory at once.
 
-    :param str path_to_plink_files_with_prefix: path prefix to genotype PLINK files for background kernel construction, if several files should be loaded please use the wildcard character *
+    :param str path_to_plink_files_with_prefix: path prefix to genotype PLINK files for background kernel construction
     :param int blocksize: how many genotypes to load at once; should be chosen dependent on RAM available
     :param str/int LOCO_chrom_id: identifier of the chromosome/region that is used in the respective test set and should be excluded from the background kernel or None if all variants should be included
     :param bool forcelowrank: enforce low rank data loading behavior for testing purposes
 
     .. note:: The leave-one-chromosome-out (LOCO) strategy can be disabled with :attr:`LOCO_chrom_id`.
-    .. note:: The input file directory should only contain a single FAM file (requirement of `pandas_plink <https://pandas-plink.readthedocs.io/en/latest/api/pandas_plink.read_plink.html>`_).
     """
 
     def __init__(self, path_or_bed, blocksize, LOCO_chrom_id=None, forcelowrank=False):
@@ -282,8 +281,7 @@ class GRMLoaderSnpReader:
             temp_genotypes = VariantLoader.standardize(temp_genotypes)
             temp_n_SNVS = temp_genotypes.shape[1]
             nb_SNVs_filtered += temp_n_SNVS
-            temp_K = np.matmul(temp_genotypes, temp_genotypes.T)
-            K0 += temp_K
+            K0 += np.matmul(temp_genotypes, temp_genotypes.T)
         # Normalize
         return K0 / nb_SNVs_filtered, nb_SNVs_filtered
 

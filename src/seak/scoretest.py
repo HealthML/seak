@@ -677,7 +677,7 @@ class Scoretest2K(Scoretest):
         G2tPG1 = GPG[n1:, 0:n1]
 
         # conditioning of the test statistics:
-        G1tPG2_G2tPG2inv = G1tPG2.dot(np.inv(G2tPG2))
+        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
 
         # conditional squaredform
         expected_teststat = G1tPG2_G2tPG2inv.dot(G2tPY)
