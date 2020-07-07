@@ -17,6 +17,7 @@ import pandas as pd
 from pandas_plink import read_plink
 
 from pysnptools.snpreader import Bed, SnpReader
+from pysnptools.standardizer import Unit, DiagKtoN
 from seak.data_loaders import VariantLoader
 
 # set logging configs
@@ -242,19 +243,27 @@ class GRMLoaderSnpReader:
         :return: normalized genotypes :math:`G_0` and number of SNVs that where loaded
         :rtype: numpy.ndarray, int
         """
-        temp_genotypes = self.bed[:, self.variants_to_include].read().val
-        # pre-processing
-        ## TODO: try out pysnptools built-in standardizers
-        temp_genotypes = VariantLoader.mean_imputation(temp_genotypes)
-        filter_invariant = temp_genotypes == temp_genotypes[0, :]
-        filter_invariant = ~filter_invariant.all(0)
-        filter_all_nan = ~np.all(np.isnan(temp_genotypes), axis=0)
-        total_filter = filter_invariant & filter_all_nan
-        temp_genotypes = temp_genotypes[:, total_filter]
-        temp_genotypes = VariantLoader.standardize(temp_genotypes)
-        nb_SNVs_filtered = temp_genotypes.shape[1]
+
+        temp_genotypes = self.bed[:, self.variants_to_include].read().standardize(Unit()).val
+
+        # Replaced the code below with PySnpTools internal standardizer
+        #filter_invariant = ~(temp_genotypes == temp_genotypes[0, :]).all(0)
+        #filter_invariant = ~filter_invariant.all(0)
+        #filter_all_nan = ~np.all(np.isnan(temp_genotypes), axis=0)
+        #total_filter = filter_invariant & filter_all_nan
+        #temp_genotypes = temp_genotypes[:, total_filter]
+        #temp_genotypes = VariantLoader.standardize(temp_genotypes)
+        #nb_SNVs_filtered = temp_genotypes.shape[1]
         # Normalize
-        return temp_genotypes / np.sqrt(nb_SNVs_filtered), nb_SNVs_filtered
+        #return temp_genotypes / np.sqrt(nb_SNVs_filtered), nb_SNVs_filtered
+
+        # TODO: is invariant-filtering really necessary here?
+        invariant = (temp_genotypes == temp_genotypes[0, :]).all(0)
+
+        n_filtered = (~invariant).sum()
+        temp_genotypes /= np.sqrt(n_filtered)
+
+        return temp_genotypes[:, ~invariant], n_filtered
 
     def _build_K0_blocked(self):
         """Full rank case: Builds background kernel :math:`K_0` by loading blocks of SNPs from provided bed file (PLINK 1).
@@ -265,24 +274,31 @@ class GRMLoaderSnpReader:
         K0 = np.zeros([self.nb_ind, self.nb_ind], dtype=np.float32)
         nb_SNVs_filtered = 0
         stop = self.nb_SNVs_unf
+
         for start in range(0, stop, self.blocksize):
+
             if start+self.blocksize >= stop:
-                print(self.variants_to_include)
-                temp_genotypes = self.bed[:, self.variants_to_include[start:]].read().val
+                temp_genotypes = self.bed[:, self.variants_to_include[start:]].read().standardize(Unit()).val
             else:
-                temp_genotypes = self.bed[:, self.variants_to_include[start:start + self.blocksize]].read().val
-            ## TODO: try out pysnptools built-in standardizers
-            temp_genotypes = VariantLoader.mean_imputation(temp_genotypes)
-            filter_invariant = temp_genotypes == temp_genotypes[0, :]
-            filter_invariant = ~filter_invariant.all(0)
-            filter_all_nan = ~np.all(np.isnan(temp_genotypes), axis=0)
-            total_filter = filter_invariant & filter_all_nan
-            temp_genotypes = temp_genotypes[:, total_filter]
-            temp_genotypes = VariantLoader.standardize(temp_genotypes)
-            temp_n_SNVS = temp_genotypes.shape[1]
-            nb_SNVs_filtered += temp_n_SNVS
-            K0 += np.matmul(temp_genotypes, temp_genotypes.T)
-        # Normalize
+                temp_genotypes = self.bed[:, self.variants_to_include[start:start + self.blocksize]].read().standardize(Unit()).val
+
+            # Replaced the code below with the PySnpTools internal standardizer
+            # temp_genotypes = VariantLoader.mean_imputation(temp_genotypes)
+            # filter_invariant = temp_genotypes == temp_genotypes[0, :]
+            # filter_invariant = ~filter_invariant.all(0)
+            # filter_all_nan = ~np.all(np.isnan(temp_genotypes), axis=0)
+            # total_filter = filter_invariant & filter_all_nan
+            # temp_genotypes = temp_genotypes[:, total_filter]
+            # temp_genotypes = VariantLoader.standardize(temp_genotypes)
+            # temp_n_SNVS = temp_genotypes.shape[1]
+            # nb_SNVs_filtered += temp_n_SNVS
+
+            # TODO: is invariant-filtering really necessary here?
+            invariant = (temp_genotypes == temp_genotypes[0, :]).all(0)
+
+            K0 += np.matmul(temp_genotypes[:, ~invariant], temp_genotypes[:, ~invariant].T)
+            nb_SNVs_filtered += (~invariant).sum()
+
         return K0 / nb_SNVs_filtered, nb_SNVs_filtered
 
     def compute_background_kernel(self):
@@ -297,8 +313,8 @@ class GRMLoaderSnpReader:
             logging.warning('Data to construct background kernel was not overlapped with data of set to be tested.')
         self.nb_ind = self.bed.iid_count
         self.nb_SNVs_unf = self.bed.sid_count
-        print('# of individuals: {}'.format(self.nb_ind))
-        print('# of SNVs: {}'.format(self.nb_SNVs_unf))
+        print('# of individuals for background kernel: {}'.format(self.nb_ind))
+        print('# of (unfiltered) SNVs for background kernel: {}'.format(self.nb_SNVs_unf))
         # low rank
         if self.nb_ind > self.nb_SNVs_unf or self.forcelowrank:
             self.G0, self.nb_SNVs_f = self._build_G0()
@@ -307,6 +323,7 @@ class GRMLoaderSnpReader:
         else:
             self.G0 = None
             self.K0, self.nb_SNVs_f = self._build_K0_blocked()
+        print('# of filtered SNVs for background kernel: {}'.format(self.nb_SNVs_f))
 
 
 class GRMLoader_from_file:

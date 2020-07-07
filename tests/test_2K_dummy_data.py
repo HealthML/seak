@@ -49,8 +49,8 @@ def test_full_rank_continuous():
                                                             covariate_column_names=['cov1', 'cov2'])
 
     # Background_kernel
-    background_kernel = construct_background_kernel.GRMLoader(path_to_plink_bg_kernel, 200, 1)
-    # background_kernel = construct_background_kernel.GRMLoaderSnpReader(path_to_plink_bg_kernel + '.bed', 200, '1')
+    # background_kernel = construct_background_kernel.GRMLoader(path_to_plink_bg_kernel, 10, 1)
+    background_kernel = construct_background_kernel.GRMLoaderSnpReader(path_to_plink_bg_kernel + '.bed', 10, '1')
 
     # Overlap individuals: genotypes and covariates
     genotypes_covariates_GRM_intersection = intersect_ids(plink_loader.get_iids(), intersect_ids(covariate_loader_csv.get_iids(), background_kernel.get_iids()))
@@ -66,6 +66,7 @@ def test_full_rank_continuous():
 
     background_kernel.compute_background_kernel()
     print('nb_SNVs_unf: {}, nb_SNVs_f: {}'.format(background_kernel.nb_SNVs_unf, background_kernel.nb_SNVs_f))
+    print('sum(diag(K)): {}'.format(np.diag(background_kernel.K0).sum()))
 
     Y, X = covariate_loader_csv.get_one_hot_covariates_and_phenotype(test_type='2K')
     null_model = scoretest.Scoretest2K(Y, X, background_kernel.K0, background_kernel.G0)
@@ -95,14 +96,17 @@ def test_full_rank_continuous():
         temp_genotypes_info_dict['time'] = temp_time
         results = results.append(temp_genotypes_info_dict, ignore_index=True)
 
-    reference_result = pd.read_csv(data_path + 'reference_results/test_full_rank_continuous_2K.csv', index_col=0)
+    # results.to_csv('./test_full_rank_continuous_2K.csv')
+    reference_result = pd.read_csv(data_path + 'reference_results/test_full_rank_continuous_2K_computed.csv', index_col=0)
+    print(data_path + 'reference_results/test_full_rank_continuous_2K.csv')
+
     print('expected result:')
     print(reference_result)
     print('actual result:')
     print(results)
-    # print(np.corrcoef(reference_result['p_value'], results['p_value']))
-    print('np isclose of p-values:')
-    print(np.all((np.isclose(reference_result['p_value'], results['p_value']))))
+    print('p-value corrcoef:')
+    print(np.corrcoef(reference_result['p_value'], results['p_value']))
+
     assert np.all((np.isclose(reference_result['p_value'], results['p_value']))), 'The last change in code changes the result!!'
 
 
@@ -177,6 +181,9 @@ def test_low_rank_continuous_low_rank_bg():
     null_model = scoretest.Scoretest2K(Y, X, background_kernel.K0, background_kernel.G0)
     results = pd.DataFrame(columns=['name', 'chrom', 'start', 'end', 'p_value', 'n_SNVs', 'time'])
 
+    print('nb_SNVs_unf: {}, nb_SNVs_f: {}'.format(background_kernel.nb_SNVs_unf, background_kernel.nb_SNVs_f))
+    print('sum(diag(K)): {}'.format(np.diag(background_kernel.K0).sum()))
+
     for region in ucsc_region_loader:
         t_test_gene_start = time.time()
         temp_genotypes_info_dict = region
@@ -203,10 +210,15 @@ def test_low_rank_continuous_low_rank_bg():
         results = results.append(temp_genotypes_info_dict, ignore_index=True)
 
     # results.to_csv('./test_low_rank_continuous_2K_low_rank_bg.csv')
+    reference_result = pd.read_csv(data_path + 'reference_results/test_low_rank_continuous_2K_low_rank_bg_computed.csv', index_col=0)
+
+    print('expected result:')
+    print(reference_result)
+    print('actual result:')
     print(results)
-    reference_result = pd.read_csv(data_path + 'reference_results/test_low_rank_continuous_2K_low_rank_bg.csv', index_col=0)
+    print('p-value corrcoef:')
     print(np.corrcoef(reference_result['p_value'], results['p_value']))
-    print(np.all((np.isclose(reference_result['p_value'], results['p_value']))))
+
     assert np.all((np.isclose(reference_result['p_value'],
                               results['p_value']))), 'The last change in code changes the result!!'
 
