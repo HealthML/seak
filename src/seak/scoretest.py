@@ -39,6 +39,7 @@ import time
 import numpy as np
 import scipy as sp
 import scipy.linalg as LA
+from scipy.stats import chi2
 import statsmodels.api as sm
 
 from seak.mingrid import minimize1D
@@ -198,6 +199,8 @@ class Scoretest:
         """
         raise NotImplementedError
 
+    # TODO: if GPG has shape (1,1) we don't need davies method... maybe that is faster?
+
     @staticmethod
     def _pv_davies(squaredform, GPG):
         """Given the test statistic and GPG computes the corresponding p-value."""
@@ -312,6 +315,7 @@ class ScoretestNoK(Scoretest):
         GPG /= self.sigma2 * 2.0  # what we will take eigenvalues of for Davies, scale because P is 0.5 * 1/sigmae2 * S
 
         return squaredform, GPG
+
 
     def _score_conditional(self, G1, G2):
         """Computes squaredform and GPG, input for p-value computation.

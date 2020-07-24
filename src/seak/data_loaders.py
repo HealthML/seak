@@ -699,7 +699,7 @@ class Hdf5Loader(AnnotationLoader):
                                     low_memory=False, dtype={'chrom': str, 'name': str})
         veps_index_df['veps_nindex'] = veps_index_df.index
         if from_janggu:
-            veps_index_df['inferred_name'] = veps_index_df['name'].apply(lambda x: x[:-4])
+            veps_index_df['inferred_name'] = veps_index_df.name.str.split(pat='_[ACGT]+>[ACGT]$', n=1, expand=True).values[:,0]
             veps_index_df.set_index(keys='inferred_name', inplace=True)
         else:
             veps_index_df.set_index(keys='name', inplace=True)
@@ -733,6 +733,7 @@ class Hdf5Loader(AnnotationLoader):
         else:
             if exclude:
                 try:
+                    # TODO: at the moment this only get varaints that are fully contained in the region, change?
                     temp_veps_index_df = self.veps_index_df[(self.veps_index_df['chrom'] == coordinates['chrom']) &
                                                             (self.veps_index_df['start'] >= coordinates['start']) &
                                                             (self.veps_index_df['end'] <= coordinates['end'])]
@@ -741,6 +742,7 @@ class Hdf5Loader(AnnotationLoader):
                 except KeyError:
                     logging.warning('No veps lie within region that you want to exclude.')
             else:
+                # TODO: at the moment this only get varaints that are fully contained in the region, change?
                 self.veps_index_df = self.veps_index_df[
                     (self.veps_index_df['chrom'] == coordinates['chrom']) &
                     (self.veps_index_df['start'] >= coordinates['start']) &
@@ -821,24 +823,33 @@ class EnsemblVEPLoader(AnnotationLoader):
         self.veps_df = pd.DataFrame(data=data,
                                     index=pd.MultiIndex.from_arrays([gene, uploaded_variation], names=['gene', 'vid']))
         # returns chrom (str) and one-based position (int)
-        chrom, pos = self._parse_location(location)
+        chrom, start, end = self._parse_location(location)
         try:
-            self.pos_df = pd.DataFrame({'chrom': chrom, 'pos': pos - 1, 'gene': gene.values},
+            self.pos_df = pd.DataFrame({'chrom': chrom, 'start': start - 1, 'end': end, 'gene': gene.values},
                                        index=self.veps_df.index.get_level_values('vid'))
-        except:
-            self.pos_df = pd.DataFrame({'chrom': chrom, 'pos': pos - 1, 'gene': gene},
+        except AttributeError:
+            self.pos_df = pd.DataFrame({'chrom': chrom,  'start': start - 1, 'end': end, 'gene': gene},
                                        index=self.veps_df.index.get_level_values('vid'))
 
     def _parse_location(self, loc):
+
         loc = pd.Series(loc)
-        loc = np.stack(loc.str.split(':'))
-        chrom = loc[:, 0]
-        pos = loc[:, 1].astype(np.int32)  # one-based!
-        return chrom, pos
+        loc = loc.str.split(':', expand=True)
+
+        chrom = np.asarray(loc.iloc[:,0])
+
+        loc = loc.iloc[:,1].str.split('-', expand=True)
+
+        start = np.asarray(loc.iloc[:,0].astype(np.int32))
+        end = np.asarray(loc.iloc[:,1].astype(np.int32)) # contains nans
+
+        # return start and end positions (1-based, fully closed)
+        return chrom, start, np.where(np.isnan(end), start, end)
 
     def _overlaps(self, coordinates):
+        # TODO: at the moment this only get varaints that are fully contained in the region, change?
         mask = (self.pos_df['chrom'] == coordinates['chrom']) & (self.pos_df['pos'] >= coordinates['start']) & (
-                self.pos_df['pos'] < coordinates['end'])
+                self.pos_df['end'] <= coordinates['end'])
         return mask
 
     def anno_by_id(self, vids=None, gene=None):

@@ -17,12 +17,14 @@ import pandas as pd
 from pandas_plink import read_plink
 
 from pysnptools.snpreader import Bed, SnpReader
+from pysnptools.kernelreader import KernelHdf5, KernelNpz, KernelData
 from pysnptools.standardizer import Unit, DiagKtoN
 from seak.data_loaders import VariantLoader
 
 # set logging configs
 logging.basicConfig(format='%(asctime)s - %(lineno)d - %(message)s')
 
+# TODO: define general kernel interface as with data_loaders
 
 class GRMLoader:
     """Constructs a background kernel :math:`K_0` from given binary PLINK 1 genotype files using the leave-one-out-chromosome (LOCO) strategy.
@@ -271,6 +273,9 @@ class GRMLoaderSnpReader:
         :return: normalized background kernel :math:`K_0` and number of SNVs that where used to built the kernel
         :rtype: numpy.ndarray, int
         """
+
+        # TODO: make use of PySnpTools KernelReader functionality
+
         K0 = np.zeros([self.nb_ind, self.nb_ind], dtype=np.float32)
         nb_SNVs_filtered = 0
         stop = self.nb_SNVs_unf
@@ -324,6 +329,23 @@ class GRMLoaderSnpReader:
             self.G0 = None
             self.K0, self.nb_SNVs_f = self._build_K0_blocked()
         print('# of filtered SNVs for background kernel: {}'.format(self.nb_SNVs_f))
+
+    def write_kernel(self, path, filetype='hdf5'):
+        """Write constructed background kernel :math:`K_0` to file, using eihter pysnptools.kernelreader.KernelHdf5 or pysnptools.kernelreader.KernelNpz.
+
+        :param str path: Path to the output file to be created.
+        :param str filetype: Either 'hdf5' or 'npz'
+        """
+        if self.K0 is None:
+            if self.G0 is not None:
+                raise ValueError('G0 is initialized: Number of individuals < number of variants. In this case no kernel is constructed.')
+            raise ValueError('K0 is not initialized, need to call compute_background_kernel() first')
+        elif filetype == 'hdf5':
+            KernelHdf5.write(path, KernelData(self.iid_fid.values, val=self.K0))
+        elif filetype == 'npz':
+            KernelNpz.write(path, KernelData(self.iid_fid.values, val=self.K0))
+        else:
+            raise ValueError('filetype has to be either "npz" or "hdf5", got {}'.format(filetype))
 
 
 class GRMLoader_from_file:
