@@ -699,7 +699,7 @@ class Hdf5Loader(AnnotationLoader):
                                     low_memory=False, dtype={'chrom': str, 'name': str})
         veps_index_df['veps_nindex'] = veps_index_df.index
         if from_janggu:
-            veps_index_df['inferred_name'] = veps_index_df.name.str.split(pat='_[ACGT]+>[ACGT]$', n=1, expand=True).values[:,0]
+            veps_index_df['inferred_name'] = veps_index_df.name.str.split(pat='_[ACGT]+>[ACGT]+$', n=1, expand=True).values[:,0]
             veps_index_df.set_index(keys='inferred_name', inplace=True)
         else:
             veps_index_df.set_index(keys='name', inplace=True)
