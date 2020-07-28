@@ -947,12 +947,12 @@ class CovariatesLoaderCSV(CovariatesLoader):
     # cov: complete data for all individuals of interest with no missing values, no duplicates, no constant columns
     # column named 'iid' with ids to merge with genotypes dataset; 'cov_index'
 
-    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names):
+    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names, sep=','):
         """Constructor."""
         if isinstance(phenotype_of_interest, str):
             phenotype_of_interest = [phenotype_of_interest]
         self.phenotype_of_interest = phenotype_of_interest
-        self.cov = pd.read_csv(path_to_covariates)
+        self.cov = pd.read_csv(path_to_covariates, sep=sep)
         ind_col = self.cov.columns[0]
         print(ind_col)
         self.cov = self.cov.rename(columns={ind_col: 'iid'})
