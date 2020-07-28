@@ -841,10 +841,10 @@ class EnsemblVEPLoader(AnnotationLoader):
         loc = loc.iloc[:,1].str.split('-', expand=True)
 
         start = np.asarray(loc.iloc[:,0].astype(np.int32))
-        end = np.asarray(loc.iloc[:,1].astype(np.int32)) # contains nans
+        end = np.asarray(loc.iloc[:,1].astype(np.float32)) # contains nans
 
         # return start and end positions (1-based, fully closed)
-        return chrom, start, np.where(np.isnan(end), start, end)
+        return chrom, start, np.where(np.isnan(end), start, end).astype(np.int32)
 
     def _overlaps(self, coordinates):
         # TODO: at the moment this only get varaints that are fully contained in the region, change?
