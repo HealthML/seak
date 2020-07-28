@@ -836,19 +836,19 @@ class EnsemblVEPLoader(AnnotationLoader):
         loc = pd.Series(loc)
         loc = loc.str.split(':', expand=True)
 
-        chrom = np.asarray(loc.iloc[:,0])
+        chrom = np.asarray(loc.iloc[:,0].values)
 
         loc = loc.iloc[:,1].str.split('-', expand=True)
 
-        start = np.asarray(loc.iloc[:,0].astype(np.int32))
-        end = np.asarray(loc.iloc[:,1].astype(np.float32)) # contains nans
+        start = np.asarray(loc.iloc[:,0].astype(np.int32).values)
+        end = np.asarray(loc.iloc[:,1].astype(np.float32).values) # contains nans
 
         # return start and end positions (1-based, fully closed)
         return chrom, start, np.where(np.isnan(end), start, end).astype(np.int32)
 
     def _overlaps(self, coordinates):
         # TODO: at the moment this only get varaints that are fully contained in the region, change?
-        mask = (self.pos_df['chrom'] == coordinates['chrom']) & (self.pos_df['pos'] >= coordinates['start']) & (
+        mask = (self.pos_df['chrom'] == coordinates['chrom']) & (self.pos_df['start'] >= coordinates['start']) & (
                 self.pos_df['end'] <= coordinates['end'])
         return mask
 
