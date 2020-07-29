@@ -242,6 +242,7 @@ class VariantLoader:
             genotypes = VariantLoader.mean_imputation(genotypes)
 
         # Drop invariant SNPs
+        ## TODO: this is broken if we dont  impute nans.
         filter_invariant = genotypes == genotypes[0, :]
         filter_invariant = ~filter_invariant.all(0)
         filter_all_nan = ~np.all(np.isnan(genotypes), axis=0)
