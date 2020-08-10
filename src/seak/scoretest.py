@@ -324,62 +324,47 @@ class ScoretestNoK(Scoretest):
 
         return squaredform, GPG
 
-
     def _score_conditional(self, G1, G2):
-        """Computes squaredform and GPG, input for p-value computation.
-
-        G2 are additional (fixed) effects to be conditioned on. e.g. the protein LOF burden or common variants.
-
-        """
+        """Computes squaredform and GPG, input for p-value computation. """
 
         # for the 1K case, P reduces to 1/sigma2*S
-        # SG, needed for "GPG", i.e. GSG :
         # multiplication with S is achieved by getting the residuals regressed on X.
-        # Residuals of G regressed on X:
-        RxG, self.Xdagger = super()._linreg(Y=G1, X=self.X, Xdagger=self.Xdagger)
+        # SG, needed for "GPG":
 
-        # Residuals of G2 regressed on X:
-        RxG2, self.Xdagger = super()._linreg(Y=G2, X=self.X, Xdagger=self.Xdagger)
+        n1 = G1.shape[1]
 
-        # we use the blockwise formula for the hat matrix, which shows that the residuals compose into 2 terms
-        # when adding additional fixed effects:
-        RxYhat, RxG2dagger = super()._hat(Y=self.RxY, X=RxG2, Xdagger=None)
-        RxY = self.RxY + RxYhat
+        Gc = np.concatenate([G1, G2], axis=1)
 
-        # re-estimate environmental variance
-        Neff = self.N - self.D - G2.shape[1]
-        sigma2_update = (RxY * RxY).sum() / (Neff * self.P)
+        # SG
+        RxGc, Xdagger = super()._linreg(Y=Gc, X=self.X, Xdagger=self.Xdagger)
 
-        # needed for the squared form:
-        GtRxY = G1.T.dot(self.RxY) - G1.T.dot(RxG2.dot(RxG2dagger.dot(self.RxY)))
+        # score statistics:
+        GtRxY = Gc.T.dot(self.RxY)
+        G2tRxY = GtRxY[n1:]
 
-        ## original note: P is never computed explicitly, only via residuals such as Py=1/sigma2(I-Xdagger*X)y and
-        ## PG=1/sigma2(I-Xdagger*X)G
-        ## also note that "RxY"=Py=1/sigma2*(I-Xdagger*X)y is nothing more (except for 1/sigma2) than the residual of y
-        ## regressed on X (i.e. y-X*beta), and similarly for PG="RxG"
+        GPG = np.dot(RxGc.T, RxGc)
+        GPG /= self.sigma2 * 2.0
 
-        # note: because GtRxY has shape (D, 1), the code below is the same as (GtRxY.transpose()).dot(GtRxY)/(2 * sigma2^2):
-        ## original note: yPKPy=yPG^T*GPy=(yPG^T)*(yPG^T)^T
+        G1tPG1 = GPG[0:n1, 0:n1]
+        G2tPG2 = GPG[n1:, n1:]
+        G1tPG2 = GPG[0:n1, n1:]
+        G2tPG1 = GPG[n1:, 0:n1]
 
-        squaredform = ((GtRxY * GtRxY).sum()) * (0.5 / (sigma2_update * sigma2_update))
+        # conditioning of the test statistics:
+        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
 
-        # we are only interested in the eigenvalues of GPG
-        # np.dot(RxG.T, RxG) and np.dot(RxG, RxG.T) have the same non-zero eigenvalues!
-        if G1.shape[0] > G1.shape[1]:
-            # full rank, i.e. D > N
-            G1hat, RxG2dagger = super()._hat(G1, X=RxG2, Xdagger=RxG2dagger)
-            RxG -= G1hat
-            GPG = np.dot(RxG.T, RxG)  # GPG is always a square matrix in the smaller dimension
-        else:
-            # low rank, i.e. D < N
-            G1hat, RxG2dagger = super()._hat(G1, X=RxG2, Xdagger=RxG2dagger)
-            RxG -= G1hat
-            GPG = np.dot(RxG, RxG.T)
+        # conditional G1tPG1 -> GPG
+        GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
 
-        GPG /= sigma2_update * 2.0  # what we will take eigenvalues of for Davies, scale because P is 0.5 * 1/sigmae2 * S
+        # conditional squaredform
+        expected_teststat = G1tPG2_G2tPG2inv.dot(G2tRxY)
+        G1tRxY_cond = GtRxY[:n1] - expected_teststat
+
+        squaredform = ((G1tRxY_cond * G1tRxY_cond).sum()) * (0.5 / (self.sigma2 * self.sigma2))
+
+        GPG /= self.sigma2 * 2.0  # what we will take eigenvalues of for Davies, scale because P is 0.5 * 1/sigmae2 * S
 
         return squaredform, GPG
-
 
 class ScoretestLogit(Scoretest):
     """Single kernel score-based set-association test for binary phenotypes.
@@ -641,7 +626,7 @@ class Scoretest2K(Scoretest):
                 GPG_lowr = UUG.dot(UUG.T) / self.sigma2e
             GPG += GPG_lowr
 
-        GPG = GPG * 0.5
+        GPG *= 0.5
 
         # in the original they compute expectationsqform (expected value) and varsqform (variance) fo the squared form.
         # these were not used.
@@ -698,7 +683,7 @@ class Scoretest2K(Scoretest):
 
         # conditional G1tPG1 -> GPG
         GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
-        GPG = GPG * 0.5
+        GPG *= 0.5
 
         return squaredform, GPG
 
