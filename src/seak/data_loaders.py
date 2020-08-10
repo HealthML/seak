@@ -842,7 +842,10 @@ class EnsemblVEPLoader(AnnotationLoader):
         loc = loc.iloc[:,1].str.split('-', expand=True)
 
         start = np.asarray(loc.iloc[:,0].astype(np.int32).values)
-        end = np.asarray(loc.iloc[:,1].astype(np.float32).values) # contains nans
+        try:
+            end = np.asarray(loc.iloc[:,1].astype(np.float32).values) # contains nans
+        except IndexError:
+            end = start
 
         # return start and end positions (1-based, fully closed)
         return chrom, start, np.where(np.isnan(end), start, end).astype(np.int32)
