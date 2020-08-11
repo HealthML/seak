@@ -343,7 +343,6 @@ class ScoretestNoK(Scoretest):
         G2tRxY = GtRxY[n1:]
 
         GPG = np.dot(RxGc.T, RxGc)
-        GPG /= self.sigma2 * 2.0
 
         G1tPG1 = GPG[0:n1, 0:n1]
         G2tPG2 = GPG[n1:, n1:]
@@ -360,9 +359,8 @@ class ScoretestNoK(Scoretest):
         expected_teststat = G1tPG2_G2tPG2inv.dot(G2tRxY)
         G1tRxY_cond = GtRxY[:n1] - expected_teststat
 
-        squaredform = ((G1tRxY_cond * G1tRxY_cond).sum()) * (0.5 / (self.sigma2 * self.sigma2))
-
-        GPG /= self.sigma2 * 2.0  # what we will take eigenvalues of for Davies, scale because P is 0.5 * 1/sigmae2 * S
+        squaredform = ((G1tRxY_cond * G1tRxY_cond).sum()) / (2.0 * self.sigma2 * self.sigma2)
+        GPG /= (self.sigma2 * 2.0)
 
         return squaredform, GPG
 
