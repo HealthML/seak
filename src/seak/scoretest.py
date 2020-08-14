@@ -39,7 +39,8 @@ import time
 import numpy as np
 import scipy as sp
 import scipy.linalg as LA
-from scipy.stats import chi2
+from scipy.optimize import brentq as root
+from scipy.stats import chi2, norm
 import statsmodels.api as sm
 
 from seak.mingrid import minimize1D
@@ -162,7 +163,7 @@ class Scoretest:
             return Yhat, Xdagger
 
 
-    def pv_alt_model(self, G1, G2=None):
+    def pv_alt_model(self, G1, G2=None, method='davies'):
         """Computes p-value of the alternative model.
 
         :param numpy.ndarray G1: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs to test association for)
@@ -179,7 +180,12 @@ class Scoretest:
                 logging.error('Number of individuals in G1 and G2 do not match.')
             squaredform, GPG = self._score_conditional(G1, G2)
 
-        pv = self._pv_davies(squaredform, GPG)
+        if method == 'davies':
+            pv = self._pv_davies(squaredform, GPG)
+        elif method == 'saddle':
+            pv = self._pv_saddle(squaredform, GPG)
+        else:
+            raise NotImplementedError('method "{}" not implemented.'.format(method))
 
         return pv
 
@@ -203,7 +209,6 @@ class Scoretest:
         """
         raise NotImplementedError
 
-    # TODO: if GPG has shape (1,1) we don't need davies method... maybe that is faster?
 
     @staticmethod
     def _pv_davies(squaredform, GPG):
@@ -214,16 +219,30 @@ class Scoretest:
 
     @staticmethod
     def _pv_davies_eig(squaredform, eigvals):
-        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value."""
+        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value using Davie's method"""
+
+        if squaredform == 0.:
+            return 1.
+
+        if len(eigvals) == 1:
+            # skip
+            return (chi2(df=1., scale=eigvals).sf(squaredform))[0]
+
         try:
             result = Scoretest._qf(squaredform, eigvals)
         except DaviesError:
-            result = [np.nan]  # if Davies method does not converge, return nan
+            logging.warning('Using "saddle" instead of "davies" (likely because "davies" did not converge)')
+            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]  # if Davies method does not converge use
         # removed keyword argument that corresponds to default.
+
+        if result[0] == 0.:
+            logging.warning('Using "saddle" instead of "davies" (Davies returned 0.)')
+            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]
+
         return result[0]
 
     @staticmethod
-    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-07):
+    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-9):
         """Given the test statistic (squaredform) and the eigenvalues of GPG computes the corresponding p-value, calls a C script."""
         # Pia: changed default for acc to 1e-07 as this is the only value the function is ever called with in fastlmm
         from seak.cppextension import wrap_qfc
@@ -243,6 +262,64 @@ class Scoretest:
             raise DaviesError
 
         return pval, ifault[0], trace
+
+    @staticmethod
+    def _pv_saddle(squaredform, GPG):
+        eigvals = LA.eigh(GPG, eigvals_only=True)
+        pv = Scoretest._pv_saddle_eig(squaredform, eigvals)
+        return pv
+
+    @staticmethod
+    def _pv_saddle_eig(squaredform, eigvals, delta=None):
+        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value using saddle-point approximation."""
+        # (D. KUONEN 1999) as implemented in the skatMeta package
+        x = squaredform
+        lambd = eigvals
+        delta = np.zeros(len(lambd)) if delta is None else delta
+
+        if x == 0.:
+            # skip
+            return 1.
+
+        if len(lambd) == 1:
+            # skip
+            return (chi2(df=1., loc=delta, scale=lambd).sf(x))[0]
+
+        d = np.max(lambd)
+        lambd /= d
+        x /= d
+
+        def k0(zeta):
+            return -1 * np.sum(np.log(1 - 2 * zeta * lambd)) / 2 + np.sum((delta * lambd * zeta) / (1 - 2 * zeta * lambd))
+
+        def kprime0(zeta):
+            return np.sum(lambd / (1 - 2 * zeta * lambd)) + np.sum((delta*lambd)/(1-2*zeta*lambd) + 2*(delta*zeta*lambd**2)/(1-2*zeta*lambd)**2)
+
+        def kpprime0(zeta):
+            return 2 * np.sum(lambd**2 / (1-2*zeta*lambd)**2) + np.sum((4*delta*lambd**2) / (1-2*zeta*lambd)**2 + 8*delta*zeta*lambd**3 / (1-2*zeta*lambd)**3)
+
+        n = len(lambd)
+
+        if np.any(lambd < 0.):
+            lmin = np.max(1 / (2 * lambd[lambd < 0.])) * 0.99999
+        elif x > np.sum(lambd):
+            lmin = -0.01
+        else:
+            lmin = -n / (2 * x)
+
+        lmax = np.min(1 / (2 * lambd[lambd > 0.])) * 0.99999
+
+        hatzeta = root(lambda zeta: kprime0(zeta) - x, lmin, lmax)
+
+        w = np.sign(hatzeta) * np.sqrt(2 * (hatzeta * x - k0(hatzeta)))
+        v = hatzeta * np.sqrt(kpprime0(hatzeta))
+
+        if np.abs(hatzeta) < 1e-4:
+            return np.nan
+        else:
+            return norm(loc=0., scale=1.).sf(w + np.log(v/w)/w)
+
+
 
 
 class ScoretestNoK(Scoretest):
