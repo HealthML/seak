@@ -33,7 +33,7 @@ def test_full_rank_logit():
                                           hdf5_key='diffscore')
 
     # Genotypes
-    plink_loader = data_loaders.PlinkLoader(path_to_plink_files_with_prefix=path_to_plink_files_with_prefix)
+    plink_loader = data_loaders.VariantLoaderSnpReader(path_or_bed=path_to_plink_files_with_prefix+'.bed')
 
     # Genes
     ucsc_region_loader = data_loaders.BEDRegionLoader(path_to_regions_UCSC_BED=path_to_reference_genes_bed,
@@ -47,31 +47,31 @@ def test_full_rank_logit():
     # Overlap individuals: genotypes and covariates
     print('Overlaps')
     print('Individuals')
-    genotypes_covariates_intersection = plink_loader.get_iids().intersection(covariate_loader_csv.get_iids())
+    genotypes_covariates_intersection = data_loaders.intersect_ids(plink_loader.get_iids(), covariate_loader_csv.get_iids())
 
     print(genotypes_covariates_intersection.shape)
     print(genotypes_covariates_intersection)
 
     # Overlap genotypes with VEPs
     print('Genotypes')
-    print(len(plink_loader.bim.index))
+    # print(len(plink_loader.bim.index))
     print(len(hdf5_loader.veps_index_df.index))
     veps_genotypes_intersection = hdf5_loader.get_vids().intersection(plink_loader.get_vids())
     print(len(veps_genotypes_intersection))
 
     # Update respective instances
     print('Updates')
-    print('plink_loader.bim.shape', plink_loader.bim.shape)
+    # print('plink_loader.bim.shape', plink_loader.bim.shape)
     plink_loader.update_variants(veps_genotypes_intersection)
-    print('plink_loader.bim.shape', plink_loader.bim.shape)
+    # print('plink_loader.bim.shape', plink_loader.bim.shape)
     print('hdf5_loader.veps_index_df.shape', hdf5_loader.veps_index_df.shape)
 
     hdf5_loader.update_variants(veps_genotypes_intersection)
     print('hdf5_loader.veps_index_df.shape', hdf5_loader.veps_index_df.shape)
 
-    print('plink_loader.fam.shape', plink_loader.fam.shape)
+    # print('plink_loader.fam.shape', plink_loader.fam.shape)
     plink_loader.update_individuals(genotypes_covariates_intersection)
-    print('plink_loader.fam.shape', plink_loader.fam.shape)
+    # print('plink_loader.fam.shape', plink_loader.fam.shape)
     print('covariate_loader_csv.cov.shape', covariate_loader_csv.cov.shape)
     covariate_loader_csv.update_individuals(genotypes_covariates_intersection)
     print('covariate_loader_csv.cov.shape', covariate_loader_csv.cov.shape)
@@ -83,7 +83,7 @@ def test_full_rank_logit():
     for index, region in ucsc_region_loader.regions.iterrows():
         t_test_gene_start = time.time()
         temp_genotypes_info_dict = region.to_dict()
-        temp_genotypes, temp_vids = plink_loader.genotypes_by_region(region)
+        temp_genotypes, temp_vids = plink_loader.genotypes_by_region(region, return_pos=False)
 
         if temp_genotypes is None:
             continue
@@ -147,7 +147,7 @@ def test_full_rank_logit_automatic_intersection():
                                           hdf5_key='diffscore')
 
     # Genotypes
-    plink_loader = data_loaders.PlinkLoader(path_to_plink_files_with_prefix=path_to_plink_files_with_prefix)
+    plink_loader = data_loaders.VariantLoaderSnpReader(path_to_plink_files_with_prefix+'.bed')
 
     # Genes
     ucsc_region_loader = data_loaders.BEDRegionLoader(path_to_regions_UCSC_BED=path_to_reference_genes_bed,
@@ -168,7 +168,7 @@ def test_full_rank_logit_automatic_intersection():
     for index, region in ucsc_region_loader.regions.iterrows():
         t_test_gene_start = time.time()
         temp_genotypes_info_dict = region.to_dict()
-        temp_genotypes, temp_vids = plink_loader.genotypes_by_region(region)
+        temp_genotypes, temp_vids = plink_loader.genotypes_by_region(region, return_pos=False)
 
         if temp_genotypes is None:
             continue
