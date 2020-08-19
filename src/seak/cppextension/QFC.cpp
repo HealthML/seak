@@ -1,21 +1,21 @@
 /*
 ------------------ ThirdPartyNotices------------------------------------------------------------------------------------
 This file is based on or incorporates material from the projects listed below
-Such licenses and notices are provided for informational purposes only.  
+Such licenses and notices are provided for informational purposes only.
 
 
 Copyright (c) Robert Davies
 All rights reserved.
- 
+
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met: 
- 
+modification, are permitted provided that the following conditions are met:
+
 1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer. 
+   list of conditions and the following disclaimer.
 2. Redistributions in binary form must reproduce the above copyright notice,
   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution. 
- 
+   and/or other materials provided with the distribution.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,7 +26,7 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
--------------End of ThirdPartyNotices--------------------------------------- 
+-------------End of ThirdPartyNotices---------------------------------------
 */
 
 
@@ -131,7 +131,7 @@ static real exp1(real x)               /* to avoid underflows  */
       extern real lmin,lmax,mean;
       u2 = *upn;   u1 = 0.0;  c1 = mean;
       rb = 2.0 * ((u2 > 0.0) ? lmax : lmin);
-      for (u = u2 / (1.0 + u2 * rb); errbd(u, &c2) > accx; 
+      for (u = u2 / (1.0 + u2 * rb); errbd(u, &c2) > accx;
          u = u2 / (1.0 + u2 * rb))
       {
          u1 = u2;  c1 = c2;  u2 = 2.0 * u2;
@@ -234,6 +234,7 @@ static real exp1(real x)               /* to avoid underflows  */
          x = inpi * exp1(sum3) / u;
 	 if ( !  mainx )
          x = x * (1.0 - exp1(-0.5 * tausq * square(u)));
+         // possible place where we could get negative values?
          sum1 = sin(0.5 * sum1) * x;  sum2 = 0.5 * sum2 * x;
          intl = intl + sum1; ersm = ersm + sum2;
       }
@@ -338,7 +339,7 @@ output:
       qfval = -1.0; acc1 = acc; ndtsrt = TRUE;  fail = FALSE;
       xlim = (real)lim;
       th=(int*)malloc(r*(sizeof(int)));
-      if (! th) { *ifault=5;  goto  endofproc; } 
+      if (! th) { *ifault=5;  goto  endofproc; }
 
       /* find mean, sd, max and min of lb,
          check that parameter values are valid */
@@ -380,6 +381,7 @@ output:
       /* find RANGE of distribution, quit if outside this */
    l1:
       d1 = ctff(acc1, &up) - c;
+      // this is usually the spot where we get 0. p-values:
       if (d1 < 0.0) { qfval = 1.0; goto endofproc; }
       d2 = c - ctff(acc1, &un);
       if (d2 < 0.0) { qfval = 0.0; goto endofproc; }

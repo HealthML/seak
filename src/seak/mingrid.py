@@ -5,7 +5,7 @@ Minor modifications
 - adapted python syntax to 3.7 (xrange to range and print statements)
 """
 
-import scipy as SP
+import numpy as np
 import scipy.optimize as opt
 
 
@@ -95,19 +95,19 @@ def evalgrid1D(f, evalgrid=None, nGrid=10, minval=0.0, maxval=0.99999, dimF=0):
     '''
     if evalgrid is None:
         step = (maxval - minval) / (nGrid)
-        evalgrid = SP.arange(minval, maxval + step, step)
+        evalgrid = np.arange(minval, maxval + step, step)
     if dimF:
-        resultgrid = SP.ones((evalgrid.shape[0], dimF)) * 9999999999999.0
+        resultgrid = np.ones((evalgrid.shape[0], dimF)) * 9999999999999.0
     else:
-        resultgrid = SP.ones(evalgrid.shape[0]) * 9999999999999.0
+        resultgrid = np.ones(evalgrid.shape[0]) * 9999999999999.0
     for i in range(evalgrid.shape[0]):
         fevalgrid = f(evalgrid[i])
 
         is_real = False
         try:
-            is_real = SP.isreal(fevalgrid).all()
+            is_real = np.isreal(fevalgrid).all()
         except:
-            is_real = SP.isreal(fevalgrid)
+            is_real = np.isreal(fevalgrid)
         assert is_real, "function returned imaginary value"
 
         resultgrid[i] = fevalgrid
