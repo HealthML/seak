@@ -309,7 +309,11 @@ class Scoretest:
 
         lmax = np.min(1 / (2 * lambd[lambd > 0.])) * 0.99999
 
-        hatzeta = root(lambda zeta: kprime0(zeta) - x, lmin, lmax)
+        try:
+            hatzeta = root(lambda zeta: kprime0(zeta) - x, lmin, lmax, maxiter=1000)
+        except RuntimeError as e:
+            logging.warning('P-value computation did not converge:\n{}'.format(e))
+            return np.nan
 
         w = np.sign(hatzeta) * np.sqrt(2 * (hatzeta * x - k0(hatzeta)))
         v = hatzeta * np.sqrt(kpprime0(hatzeta))
