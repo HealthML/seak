@@ -16,6 +16,8 @@ from setuptools import Extension
 from setuptools import find_packages
 from setuptools import setup
 
+from Cython.Build import cythonize
+
 
 def read(*names, **kwargs):
     with io.open(
@@ -29,6 +31,7 @@ ext_modules = [Extension(name="seak.cppextension.wrap_qfc",
                          language="c++",
                          sources=["src/seak/cppextension/wrap_qfc.cpp", "src/seak/cppextension/QFC.cpp"],
                          include_dirs=[numpy.get_include()])]  # , define_macros=macros)]
+#ext_modules = cythonize([Extension("seak.cppextension.wrap_qfc", ["src/seak/cppextension/wrap_qfc.pyx", "src/seak/cppextension/QFC.cpp"], include_dirs=[numpy.get_include()])])
 
 setup(
     name='seak',

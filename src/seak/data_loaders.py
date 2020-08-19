@@ -28,7 +28,7 @@ logging.basicConfig(format='%(asctime)s - %(lineno)d - %(message)s')
 def intersect_ids(ar1, ar2):
     """
     returns the intersection (common elements) of ar1 and ar2, in the order that they first appear in ar1.
-    
+
     :param np.ndarray ar1: Array of ids
     :param np.ndarray ar2: Array of ids
     """
@@ -93,7 +93,7 @@ class VariantLoader:
         """Returns all individual ids.
 
         :return: Returns all individual ids.
-        :rtype: pandas.Index
+        :rtype: np.ndarray
         :raises NotImplementedError: Interface.
         """
         raise NotImplementedError
@@ -102,7 +102,7 @@ class VariantLoader:
         """Returns all variant ids.
 
         :return: Returns all variant ids.
-        :rtype: pandas.Index
+        :rtype: np.ndarray
         :raises NotImplementedError: Interface.
         """
         raise NotImplementedError
@@ -121,19 +121,27 @@ class VariantLoader:
         return mx.filled(np.nanmean(mx, axis=0))
 
     @staticmethod
-    def standardize(X):
-        """Z-score normalizes the genotype data, excluding missing values from computation.
+    def standardize(X, inplace=False):
+        """Z-score normalizes the genotype data, excluding missing values from computation. If inplace == True, performs
+        operations inplace and returns a reference to X itself.
 
         :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
+        ::
         :return: z-score normalized array
         :rtype: numpy.ndarray
         """
         mean = np.nanmean(X, axis=0)
         std = np.nanstd(X, axis=0)
-        return (X - mean) / std
+
+        if inplace:
+            X -= mean
+            X /= std
+            return X
+        else:
+            return (X - mean) / std
 
     @staticmethod
-    def center(X):
+    def center(X, inplace=False):
         """Mean centers genotype values, excluding missing values from computation.
 
         :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
@@ -141,10 +149,15 @@ class VariantLoader:
         :rtype: numpy.ndarray
         """
         mean = np.nanmean(X, axis=0)
-        return X - mean
+
+        if inplace:
+            X -= mean
+            return X
+        else:
+            return X - mean
 
     @staticmethod
-    def scale(X):
+    def scale(X, inplace=False):
         """Scales the genotype data by standard deviation, excluding missing values from computation.
 
         :param numpy.ndarray X: 2D array wit dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
@@ -152,7 +165,12 @@ class VariantLoader:
         :rtype: numpy.ndarray
         """
         std = np.nanstd(X, axis=0)
-        return X / std
+
+        if inplace:
+            X /= std
+            return X
+        else:
+            return X / std
 
     @staticmethod
     def preprocess_genotypes(genotypes, vids, impute_mean=True,
@@ -179,6 +197,10 @@ class VariantLoader:
         :return: filtered genotypes, index of variants that remain after filtering
         :rtype: numpy.ndarray, pandas.Index
         """
+
+        ## TODO: make more memory efficient by performing some operations inplace
+        ## potentially separate filtering from processing (?)
+
         assert not (
                 invert_encoding & recode_maf), 'Genotypes can either be completely inverted or recoded according to ' \
                                                'minor allele frequency but not both.'
@@ -220,6 +242,7 @@ class VariantLoader:
             genotypes = VariantLoader.mean_imputation(genotypes)
 
         # Drop invariant SNPs
+        ## TODO: this is broken if we dont  impute nans.
         filter_invariant = genotypes == genotypes[0, :]
         filter_invariant = ~filter_invariant.all(0)
         filter_all_nan = ~np.all(np.isnan(genotypes), axis=0)
@@ -332,7 +355,7 @@ class VariantLoaderSnpReader(VariantLoader):
                               SnpReader), 'path_or_bed must either be a path to a bed-file, or an instance of SnpReader.'
             self.bed = path_or_bed
         self.bed.pos[:, 0] = self.bed.pos[:, 0].astype('str')  # chromosome should be str, stored positions are 1-based
-        self.iid_fid = pd.DataFrame(self.bed.iid, index=self.bed.iid[:,0], columns=['iid','fid'])
+        self.iid_fid = pd.DataFrame(self.bed.iid, index=self.bed.iid[:, 1], columns=['fid', 'iid'])
 
     def update_variants(self, vids=None, coordinates=None, exclude=False):
         """Set variants to include/exclude based on variant ids (:attr:`vids`) or genetic coordinates (:attr:`coordinates`).
@@ -347,9 +370,9 @@ class VariantLoaderSnpReader(VariantLoader):
         :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
         """
         if vids is None and coordinates is None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
         elif vids is not None and coordinates is not None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants, not both.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants, not both.')
         elif vids is not None:
             vids, idx_query, idx_bed = np.intersect1d(vids, self.bed.sid, return_indices=True)
             if exclude:
@@ -357,7 +380,7 @@ class VariantLoaderSnpReader(VariantLoader):
                 mask[idx_bed] = False
                 self.bed = self.bed[:, mask]
             else:
-                self.bed = self.bed[:,idx_bed[np.argsort(idx_query)]]
+                self.bed = self.bed[:, idx_bed[np.argsort(idx_query)]]
         else:
             mask = (self.bed.pos[:, 0].astype(str) == coordinates['chrom']) & (self.bed.pos[:, 2] > coordinates['start']) & (
                     self.bed.pos[:, 2] <= coordinates['end'])
@@ -454,7 +477,7 @@ class VariantLoaderSnpReader(VariantLoader):
         :return:
         :rtype: pandas.Index
         """
-        return self.bed.iid[:,0]
+        return self.bed.iid[:, 1]
 
     def get_vids(self):
         """Returns all variant ids.
@@ -505,9 +528,9 @@ class PlinkLoader(VariantLoader):
         :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
         """
         if vids is None and coordinates is None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
         elif vids is not None and coordinates is not None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants, not both.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants, not both.')
         elif vids is not None:
             if exclude:
                 try:
@@ -532,7 +555,7 @@ class PlinkLoader(VariantLoader):
                     (self.bim['chrom'] == coordinates['chrom']) & (self.bim['pos'] > coordinates['start'])
                     & (self.bim['pos'] <= coordinates['end'])]
                 if self.bim.empty:
-                    logging.ERROR('No variants lie within region that you want to include.')
+                    logging.error('No variants lie within region that you want to include.')
 
     def update_individuals(self, iids, exclude=False):
         """Set individuals to include/exclude.
@@ -677,7 +700,7 @@ class Hdf5Loader(AnnotationLoader):
                                     low_memory=False, dtype={'chrom': str, 'name': str})
         veps_index_df['veps_nindex'] = veps_index_df.index
         if from_janggu:
-            veps_index_df['inferred_name'] = veps_index_df['name'].apply(lambda x: x[:-4])
+            veps_index_df['inferred_name'] = veps_index_df.name.str.split(pat='_[ACGT]+>[ACGT]+$', n=1, expand=True).values[:,0]
             veps_index_df.set_index(keys='inferred_name', inplace=True)
         else:
             veps_index_df.set_index(keys='name', inplace=True)
@@ -695,9 +718,9 @@ class Hdf5Loader(AnnotationLoader):
         :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
         """
         if vids is None and coordinates is None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
         elif vids is not None and coordinates is not None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants, not both.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants, not both.')
         elif vids is not None:
             if exclude:
                 try:
@@ -711,6 +734,7 @@ class Hdf5Loader(AnnotationLoader):
         else:
             if exclude:
                 try:
+                    # TODO: at the moment this only get varaints that are fully contained in the region, change?
                     temp_veps_index_df = self.veps_index_df[(self.veps_index_df['chrom'] == coordinates['chrom']) &
                                                             (self.veps_index_df['start'] >= coordinates['start']) &
                                                             (self.veps_index_df['end'] <= coordinates['end'])]
@@ -719,12 +743,13 @@ class Hdf5Loader(AnnotationLoader):
                 except KeyError:
                     logging.warning('No veps lie within region that you want to exclude.')
             else:
+                # TODO: at the moment this only get varaints that are fully contained in the region, change?
                 self.veps_index_df = self.veps_index_df[
                     (self.veps_index_df['chrom'] == coordinates['chrom']) &
                     (self.veps_index_df['start'] >= coordinates['start']) &
                     (self.veps_index_df['end'] <= coordinates['end'])]
                 if self.veps_index_df.empty:
-                    logging.ERROR('No veps lie within region that you want to include.')
+                    logging.error('No veps lie within region that you want to include.')
 
     def anno_by_id(self, vids, shuffle=None):
         """Retrieves annotations for a set of variant ids (:attr:`vids`).
@@ -799,24 +824,36 @@ class EnsemblVEPLoader(AnnotationLoader):
         self.veps_df = pd.DataFrame(data=data,
                                     index=pd.MultiIndex.from_arrays([gene, uploaded_variation], names=['gene', 'vid']))
         # returns chrom (str) and one-based position (int)
-        chrom, pos = self._parse_location(location)
+        chrom, start, end = self._parse_location(location)
         try:
-            self.pos_df = pd.DataFrame({'chrom': chrom, 'pos': pos - 1, 'gene': gene.values},
+            self.pos_df = pd.DataFrame({'chrom': chrom, 'start': start - 1, 'end': end, 'gene': gene.values},
                                        index=self.veps_df.index.get_level_values('vid'))
-        except:
-            self.pos_df = pd.DataFrame({'chrom': chrom, 'pos': pos - 1, 'gene': gene},
+        except AttributeError:
+            self.pos_df = pd.DataFrame({'chrom': chrom,  'start': start - 1, 'end': end, 'gene': gene},
                                        index=self.veps_df.index.get_level_values('vid'))
 
     def _parse_location(self, loc):
+
         loc = pd.Series(loc)
-        loc = np.stack(loc.str.split(':'))
-        chrom = loc[:, 0]
-        pos = loc[:, 1].astype(np.int32)  # one-based!
-        return chrom, pos
+        loc = loc.str.split(':', expand=True)
+
+        chrom = np.asarray(loc.iloc[:,0].values)
+
+        loc = loc.iloc[:,1].str.split('-', expand=True)
+
+        start = np.asarray(loc.iloc[:,0].astype(np.int32).values)
+        try:
+            end = np.asarray(loc.iloc[:,1].astype(np.float32).values) # contains nans
+        except IndexError:
+            end = start
+
+        # return start and end positions (1-based, fully closed)
+        return chrom, start, np.where(np.isnan(end), start, end).astype(np.int32)
 
     def _overlaps(self, coordinates):
-        mask = (self.pos_df['chrom'] == coordinates['chrom']) & (self.pos_df['pos'] >= coordinates['start']) & (
-                self.pos_df['pos'] < coordinates['end'])
+        # TODO: at the moment this only get varaints that are fully contained in the region, change?
+        mask = (self.pos_df['chrom'] == coordinates['chrom']) & (self.pos_df['start'] >= coordinates['start']) & (
+                self.pos_df['end'] <= coordinates['end'])
         return mask
 
     def anno_by_id(self, vids=None, gene=None):
@@ -831,7 +868,7 @@ class EnsemblVEPLoader(AnnotationLoader):
 
         if gene is None:
             if vids is None:
-                logging.ERROR('Either vids, gene, or both must be specified to access variants by id.')
+                logging.error('Either vids, gene, or both must be specified to access variants by id.')
             else:
                 return self.veps_df.loc[(slice(None), vids), :]
         else:
@@ -871,9 +908,9 @@ class EnsemblVEPLoader(AnnotationLoader):
         :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
         '''
         if vids is None and coordinates is None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
         elif vids is not None and coordinates is not None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants, not both.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants, not both.')
         elif vids is not None:
             if exclude:
                 self.veps_df = self.veps_df.loc[self.veps_df.index.drop(vids, level=1)]
@@ -892,7 +929,7 @@ class EnsemblVEPLoader(AnnotationLoader):
                     self.veps_df = self.veps_df.loc[self.veps_df.index.drop(vids, level=1)]
             else:
                 if np.all(~mask):
-                    logging.ERROR('No veps lie within region that you want to include.')
+                    logging.error('No veps lie within region that you want to include.')
                 else:
                     self.pos_df = self.pos_df.loc[mask]
                     self.veps_df = self.veps_df.loc[zip(self.pos_df['gene'], self.pos_df.index.values),]
@@ -914,12 +951,12 @@ class CovariatesLoaderCSV(CovariatesLoader):
     # cov: complete data for all individuals of interest with no missing values, no duplicates, no constant columns
     # column named 'iid' with ids to merge with genotypes dataset; 'cov_index'
 
-    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names):
+    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names, sep=','):
         """Constructor."""
         if isinstance(phenotype_of_interest, str):
             phenotype_of_interest = [phenotype_of_interest]
         self.phenotype_of_interest = phenotype_of_interest
-        self.cov = pd.read_csv(path_to_covariates)
+        self.cov = pd.read_csv(path_to_covariates, sep=sep)
         ind_col = self.cov.columns[0]
         print(ind_col)
         self.cov = self.cov.rename(columns={ind_col: 'iid'})
@@ -984,7 +1021,7 @@ class CovariatesLoaderCSV(CovariatesLoader):
         if test_type == 'logit':
             phenotype = np.asarray(pd.get_dummies(self.cov[pheno], dtype=float, drop_first=True))
             if phenotype.shape[1] != 1:
-                logging.ERROR('It seems like your phenotype was not encoded binary.')
+                logging.error('It seems like your phenotype was not encoded binary.')
             phenotype = phenotype.reshape(len(phenotype), 1)
         else:
             phenotype = np.asarray(self.cov[pheno])
@@ -1158,9 +1195,9 @@ class SpliceAILoader(Hdf5Loader):
         :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
         """
         if vids is None and coordinates is None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
         elif vids is not None and coordinates is not None:
-            logging.ERROR('Either variant ids or genomic coordinates must be specified to set variants, not both.')
+            logging.error('Either variant ids or genomic coordinates must be specified to set variants, not both.')
         elif vids is not None:
             if exclude:
                 try:
@@ -1186,7 +1223,7 @@ class SpliceAILoader(Hdf5Loader):
                     (self.veps_index_df['chrom'] == coordinates['chrom']) & (self.veps_index_df['start'] >= coordinates['start'])
                     & (self.veps_index_df['end'] <= coordinates['end'])]
                 if self.veps_index_df.empty:
-                    logging.ERROR('No veps lie within region that you want to include.')
+                    logging.error('No veps lie within region that you want to include.')
 
     def anno_by_id_and_gene(self, vids, coordinates, gene=None, shuffle=None):
         """Retrieves annotations for a set of variant ids (:attr:`vids`) for a specific gene.

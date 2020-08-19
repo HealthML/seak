@@ -6,7 +6,7 @@ A single kernel score-based test is available for a logistic link function (bina
 
 Null model single kernel:
 
-.. math:: y = {\\alpha} X + {\epsilon}
+.. math:: y = {\\alpha} X + {\\epsilon}
 
 Alternative model single kernel:
 
@@ -39,6 +39,8 @@ import time
 import numpy as np
 import scipy as sp
 import scipy.linalg as LA
+from scipy.optimize import brentq as root
+from scipy.stats import chi2, norm
 import statsmodels.api as sm
 
 from seak.mingrid import minimize1D
@@ -46,6 +48,10 @@ from seak.mingrid import minimize1D
 # set logging configs
 logging.basicConfig(format='%(asctime)s - %(lineno)d - %(message)s')
 
+
+class DaviesError(Exception):
+    """raise this error if Davie's method does not converge"""
+    pass
 
 class Scoretest:
     """Superclass for all score-based set-association tests.
@@ -82,10 +88,10 @@ class Scoretest:
         self.Neff = self.N - self.D  # unbiased estimator for variance
 
         if self.P != 1:
-            logging.ERROR('More than one phenotype given.')
+            logging.error('More than one phenotype given.')
 
         if self.X.shape[0] != self.N:
-            logging.ERROR('Number of individuals in phenotype and covariates does not match.')
+            logging.error('Number of individuals in phenotype and covariates does not match.')
 
     def _set_phenotypes(self, phenotypes):
         """Casts phenotypes to two dimensions."""
@@ -157,7 +163,7 @@ class Scoretest:
             return Yhat, Xdagger
 
 
-    def pv_alt_model(self, G1, G2=None):
+    def pv_alt_model(self, G1, G2=None, method='davies'):
         """Computes p-value of the alternative model.
 
         :param numpy.ndarray G1: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs to test association for)
@@ -165,16 +171,21 @@ class Scoretest:
         :rtype: float
         """
         if G1.shape[0] != self.N:
-            logging.ERROR('Number of individuals in phenotype and genotypes to be tested does not match.')
+            logging.error('Number of individuals in phenotype and genotypes to be tested does not match.')
 
         if G2 is None:
             squaredform, GPG = self._score(G1)
         else:
             if G1.shape[0] != G2.shape[0]:
-                logging.ERROR('Number of individuals in G1 and G2 do not match.')
+                logging.error('Number of individuals in G1 and G2 do not match.')
             squaredform, GPG = self._score_conditional(G1, G2)
 
-        pv = self._pv_davies(squaredform, GPG)
+        if method == 'davies':
+            pv = self._pv_davies(squaredform, GPG)
+        elif method == 'saddle':
+            pv = self._pv_saddle(squaredform, GPG)
+        else:
+            raise NotImplementedError('method "{}" not implemented.'.format(method))
 
         return pv
 
@@ -198,6 +209,7 @@ class Scoretest:
         """
         raise NotImplementedError
 
+
     @staticmethod
     def _pv_davies(squaredform, GPG):
         """Given the test statistic and GPG computes the corresponding p-value."""
@@ -207,13 +219,30 @@ class Scoretest:
 
     @staticmethod
     def _pv_davies_eig(squaredform, eigvals):
-        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value."""
-        result = Scoretest._qf(squaredform, eigvals)
+        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value using Davie's method"""
+
+        if squaredform == 0.:
+            return 1.
+
+        if len(eigvals) == 1:
+            # skip
+            return (chi2(df=1., scale=eigvals).sf(squaredform))[0]
+
+        try:
+            result = Scoretest._qf(squaredform, eigvals)
+        except DaviesError:
+            logging.warning('Using "saddle" instead of "davies" (likely because "davies" did not converge)')
+            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]  # if Davies method does not converge use
         # removed keyword argument that corresponds to default.
+
+        if result[0] == 0.:
+            logging.warning('Using "saddle" instead of "davies" (Davies returned 0.)')
+            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]
+
         return result[0]
 
     @staticmethod
-    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-07):
+    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-9):
         """Given the test statistic (squaredform) and the eigenvalues of GPG computes the corresponding p-value, calls a C script."""
         # Pia: changed default for acc to 1e-07 as this is the only value the function is ever called with in fastlmm
         from seak.cppextension import wrap_qfc
@@ -225,8 +254,76 @@ class Scoretest:
             noncentrality = np.zeros(size)
         ifault = np.zeros(1, dtype='int32')
         trace = np.zeros(7)
+
         pval = 1.0 - wrap_qfc.qf(coeffs, noncentrality, dof, sigma, chi2val, lim, acc, trace, ifault)
+
+        if ifault[0] > 0:
+            logging.warning('ifault {} encountered during p-value computation'.format(ifault[0]))
+            raise DaviesError
+
         return pval, ifault[0], trace
+
+    @staticmethod
+    def _pv_saddle(squaredform, GPG):
+        eigvals = LA.eigh(GPG, eigvals_only=True)
+        pv = Scoretest._pv_saddle_eig(squaredform, eigvals)
+        return pv
+
+    @staticmethod
+    def _pv_saddle_eig(squaredform, eigvals, delta=None):
+        """Given the test statistic and the eigenvalues of GPG computes the corresponding p-value using saddle-point approximation."""
+        # (D. KUONEN 1999) as implemented in the skatMeta package
+        x = squaredform
+        lambd = eigvals
+        delta = np.zeros(len(lambd)) if delta is None else delta
+
+        if x == 0.:
+            # skip
+            return 1.
+
+        if len(lambd) == 1:
+            # skip
+            return (chi2(df=1., loc=delta, scale=lambd).sf(x))[0]
+
+        d = np.max(lambd)
+        lambd /= d
+        x /= d
+
+        def k0(zeta):
+            return -1 * np.sum(np.log(1 - 2 * zeta * lambd)) / 2 + np.sum((delta * lambd * zeta) / (1 - 2 * zeta * lambd))
+
+        def kprime0(zeta):
+            return np.sum(lambd / (1 - 2 * zeta * lambd)) + np.sum((delta*lambd)/(1-2*zeta*lambd) + 2*(delta*zeta*lambd**2)/(1-2*zeta*lambd)**2)
+
+        def kpprime0(zeta):
+            return 2 * np.sum(lambd**2 / (1-2*zeta*lambd)**2) + np.sum((4*delta*lambd**2) / (1-2*zeta*lambd)**2 + 8*delta*zeta*lambd**3 / (1-2*zeta*lambd)**3)
+
+        n = len(lambd)
+
+        if np.any(lambd < 0.):
+            lmin = np.max(1 / (2 * lambd[lambd < 0.])) * 0.99999
+        elif x > np.sum(lambd):
+            lmin = -0.01
+        else:
+            lmin = -n / (2 * x)
+
+        lmax = np.min(1 / (2 * lambd[lambd > 0.])) * 0.99999
+
+        try:
+            hatzeta = root(lambda zeta: kprime0(zeta) - x, lmin, lmax, maxiter=1000)
+        except RuntimeError as e:
+            logging.warning('P-value computation did not converge:\n{}'.format(e))
+            return np.nan
+
+        w = np.sign(hatzeta) * np.sqrt(2 * (hatzeta * x - k0(hatzeta)))
+        v = hatzeta * np.sqrt(kpprime0(hatzeta))
+
+        if np.abs(hatzeta) < 1e-4:
+            return np.nan
+        else:
+            return norm(loc=0., scale=1.).sf(w + np.log(v/w)/w)
+
+
 
 
 class ScoretestNoK(Scoretest):
@@ -238,7 +335,7 @@ class ScoretestNoK(Scoretest):
 
     Null model single kernel:
 
-    .. math:: Y = {\\alpha} X + {\epsilon}
+    .. math:: Y = {\\alpha} X + {\\epsilon}
 
     Alternative model single kernel:
 
@@ -309,60 +406,44 @@ class ScoretestNoK(Scoretest):
         return squaredform, GPG
 
     def _score_conditional(self, G1, G2):
-        """Computes squaredform and GPG, input for p-value computation.
-
-        G2 are additional (fixed) effects to be conditioned on. e.g. the protein LOF burden or common variants.
-
-        """
+        """Computes squaredform and GPG, input for p-value computation. """
 
         # for the 1K case, P reduces to 1/sigma2*S
-        # SG, needed for "GPG", i.e. GSG :
         # multiplication with S is achieved by getting the residuals regressed on X.
-        # Residuals of G regressed on X:
-        RxG, self.Xdagger = super()._linreg(Y=G1, X=self.X, Xdagger=self.Xdagger)
+        # SG, needed for "GPG":
 
-        # Residuals of G2 regressed on X:
-        RxG2, self.Xdagger = super()._linreg(Y=G2, X=self.X, Xdagger=self.Xdagger)
+        n1 = G1.shape[1]
 
-        # we use the blockwise formula for the hat matrix, which shows that the residuals compose into 2 terms
-        # when adding additional fixed effects:
-        RxYhat, RxG2dagger = super()._hat(Y=self.RxY, X=RxG2, Xdagger=None)
-        RxY = self.RxY + RxYhat
+        Gc = np.concatenate([G1, G2], axis=1)
 
-        # re-estimate environmental variance
-        Neff = self.N - self.D - G2.shape[1]
-        sigma2_update = (RxY * RxY).sum() / (Neff * self.P)
+        # SG
+        RxGc, Xdagger = super()._linreg(Y=Gc, X=self.X, Xdagger=self.Xdagger)
 
-        # needed for the squared form:
-        GtRxY = G1.T.dot(self.RxY) - G1.T.dot(RxG2.dot(RxG2dagger.dot(self.RxY)))
+        # score statistics:
+        GtRxY = Gc.T.dot(self.RxY)
+        G2tRxY = GtRxY[n1:]
 
-        ## original note: P is never computed explicitly, only via residuals such as Py=1/sigma2(I-Xdagger*X)y and
-        ## PG=1/sigma2(I-Xdagger*X)G
-        ## also note that "RxY"=Py=1/sigma2*(I-Xdagger*X)y is nothing more (except for 1/sigma2) than the residual of y
-        ## regressed on X (i.e. y-X*beta), and similarly for PG="RxG"
+        GPG = np.dot(RxGc.T, RxGc)
 
-        # note: because GtRxY has shape (D, 1), the code below is the same as (GtRxY.transpose()).dot(GtRxY)/(2 * sigma2^2):
-        ## original note: yPKPy=yPG^T*GPy=(yPG^T)*(yPG^T)^T
+        G1tPG1 = GPG[0:n1, 0:n1]
+        G2tPG2 = GPG[n1:, n1:]
+        G1tPG2 = GPG[0:n1, n1:]
+        G2tPG1 = GPG[n1:, 0:n1]
 
-        squaredform = ((GtRxY * GtRxY).sum()) * (0.5 / (sigma2_update * sigma2_update))
+        # conditioning of the test statistics:
+        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
 
-        # we are only interested in the eigenvalues of GPG
-        # np.dot(RxG.T, RxG) and np.dot(RxG, RxG.T) have the same non-zero eigenvalues!
-        if G1.shape[0] > G1.shape[1]:
-            # full rank, i.e. D > N
-            G1hat, RxG2dagger = super()._hat(G1, X=RxG2, Xdagger=RxG2dagger)
-            RxG -= G1hat
-            GPG = np.dot(RxG.T, RxG)  # GPG is always a square matrix in the smaller dimension
-        else:
-            # low rank, i.e. D < N
-            G1hat, RxG2dagger = super()._hat(G1, X=RxG2, Xdagger=RxG2dagger)
-            RxG -= G1hat
-            GPG = np.dot(RxG, RxG.T)
+        # conditional G1tPG1 -> GPG
+        GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
 
-        GPG /= sigma2_update * 2.0  # what we will take eigenvalues of for Davies, scale because P is 0.5 * 1/sigmae2 * S
+        # conditional squaredform
+        expected_teststat = G1tPG2_G2tPG2inv.dot(G2tRxY)
+        G1tRxY_cond = GtRxY[:n1] - expected_teststat
+
+        squaredform = ((G1tRxY_cond * G1tRxY_cond).sum()) / (2.0 * self.sigma2 * self.sigma2)
+        GPG /= (self.sigma2 * 2.0)
 
         return squaredform, GPG
-
 
 class ScoretestLogit(Scoretest):
     """Single kernel score-based set-association test for binary phenotypes.
@@ -380,8 +461,8 @@ class ScoretestLogit(Scoretest):
     def __init__(self, phenotypes, covariates):
         super().__init__(phenotypes, covariates)
         # check if is binary
-        uniquey = sp.unique(self.Y)
-        if not sp.sort(uniquey).tolist() == [0, 1]:
+        uniquey = np.unique(self.Y)
+        if not np.sort(uniquey).tolist() == [0, 1]:
             raise Exception("must use binary data in {0,1} for logit tests, found:" + str(self.Y))
         self.pY, self.stdY, self.VX, self.pinvVX = self._compute_null_model()
 
@@ -390,7 +471,7 @@ class ScoretestLogit(Scoretest):
         logreg_mod = sm.Logit(self.Y[:, 0], self.X)
         logreg_result = logreg_mod.fit(disp=0)
         pY = logreg_result.predict(self.X)
-        stdY = sp.sqrt(pY * (1.0 - pY))
+        stdY = np.sqrt(pY * (1.0 - pY))
         VX = self.X * np.lib.stride_tricks.as_strided(stdY, (stdY.size, self.X.shape[1]), (stdY.itemsize, 0))
         pinvVX = np.linalg.pinv(VX)
         return pY, stdY, VX, pinvVX
@@ -470,7 +551,7 @@ class Scoretest2K(Scoretest):
             # K0 already computed, i.e. the full rank case, work with K0
             # compute SVD of SKS
             # see Lemma 10 in Lippert et al. 2014
-            ar = sp.arange(self.K0.shape[0])
+            ar = np.arange(self.K0.shape[0])
 
             self.K0[ar, ar] += 1.0
 
@@ -491,7 +572,7 @@ class Scoretest2K(Scoretest):
             # compute SVD of SKS
             # see Lemma 10 in Lippert et al. 2014
             # the rest is identical to the case above...
-            ar = sp.arange(self.K0.shape[0])
+            ar = np.arange(self.K0.shape[0])
             self.K0[ar, ar] += 1.0
 
             PxKPx, Xdagger = super()._linreg(Y=self.K0, X=self.X, Xdagger=Xdagger)
@@ -569,14 +650,14 @@ class Scoretest2K(Scoretest):
 
         YKY = (UYS * self.UY).sum()
 
-        logdetK = sp.log(Sd).sum()
+        logdetK = np.emath.log(Sd).sum()
 
         if (self.lowrank):  # low rank part
             YKY += self.YUUY / (1.0 - h2)
-            logdetK += sp.log(1.0 - h2) * (self.Neff * self.P - k)
+            logdetK += np.emath.log(1.0 - h2) * (self.Neff * self.P - k)
 
         sigma2 = YKY / (self.Neff * self.P)
-        nLL = 0.5 * (logdetK + self.Neff * self.P * (sp.log(2.0 * sp.pi * sigma2) + 1))
+        nLL = 0.5 * (logdetK + self.Neff * self.P * (np.emath.log(2.0 * sp.pi * sigma2) + 1))
         result = {
             'nLL': nLL,
             'sigma2': sigma2,
@@ -616,8 +697,6 @@ class Scoretest2K(Scoretest):
         else:
             GPG = SUG.dot(UG.T)
 
-        # in the original they compute expectationsqform (expected value) and varsqform (variance) fo the squared form.
-        # these were not used.
 
         if self.lowrank:
             if G1.shape[0] > G1.shape[1]:
@@ -626,7 +705,64 @@ class Scoretest2K(Scoretest):
                 GPG_lowr = UUG.dot(UUG.T) / self.sigma2e
             GPG += GPG_lowr
 
-        GPG = GPG * 0.5
+        GPG *= 0.5
+
+        # in the original they compute expectationsqform (expected value) and varsqform (variance) fo the squared form.
+        # these were not used.
+
+        return squaredform, GPG
+
+    def _score_conditional(self, G1, G2):
+        """Computes squaredform and GPG with a background kernel."""
+
+        n1 = G1.shape[1]
+
+        Gc = np.concatenate([G1, G2], axis=1)
+
+        # SG
+        RxG, Xdagger = super()._linreg(Y=Gc, X=self.X, Xdagger=self.Xdagger)
+
+        # UtSG
+        UG = self.U.T.dot(RxG)
+
+        if self.lowrank:
+            UUG = RxG - self.U.dot(UG)
+
+        # Compare to Lippert 2014, Lemma 11. Rescale eigenvalues according to mixing parameters
+        # The inverse of the diagonal matrix of eigenvalues (Lambda + delta*I) is calculated trivially:
+        Sd = 1.0 / (self.S * self.sigma2g + self.sigma2e)
+
+        # matrix multiplication of UtSG with (Lambda + delta*I)^-1, which is called Sd here
+        SUG = UG * np.lib.stride_tricks.as_strided(Sd, (Sd.size, UG.shape[1]), (Sd.itemsize, 0))
+
+        GPY = SUG.T.dot(self.UY)
+        if self.lowrank:
+            GPY += UUG.T.dot(self.UUY) / self.sigma2e
+
+        G2tPY = GPY[n1:]
+
+        GPG = SUG.T.dot(UG)
+
+        if self.lowrank:
+            GPG_lowr = UUG.T.dot(UUG) / self.sigma2e
+            GPG += GPG_lowr
+
+        G1tPG1 = GPG[0:n1, 0:n1]
+        G2tPG2 = GPG[n1:, n1:]
+        G1tPG2 = GPG[0:n1, n1:]
+        G2tPG1 = GPG[n1:, 0:n1]
+
+        # conditioning of the test statistics:
+        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
+
+        # conditional squaredform
+        expected_teststat = G1tPG2_G2tPG2inv.dot(G2tPY)
+        G1tPY_cond = GPY[:n1] - expected_teststat
+        squaredform = 0.5 * (G1tPY_cond * G1tPY_cond).sum()
+
+        # conditional G1tPG1 -> GPG
+        GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
+        GPG *= 0.5
 
         return squaredform, GPG
 

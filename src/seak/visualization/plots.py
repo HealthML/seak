@@ -36,11 +36,11 @@ def _qqplot_bar(M=1000000, alphalevel = 0.05,distr = 'log10'):
 
     #assumes 'log10'
 
-    mRange=10**(sp.arange(sp.log10(0.5),sp.log10(M-0.5)+0.1,0.1));#should be exp or 10**?
+    mRange=10**(np.arange(np.emath.log10(0.5),np.emath.log10(M-0.5)+0.1,0.1));#should be exp or 10**?
     numPts=len(mRange);
-    betaalphaLevel=sp.zeros(numPts);#down in the plot
-    betaOneMinusalphaLevel=sp.zeros(numPts);#up in the plot
-    betaInvHalf=sp.zeros(numPts);
+    betaalphaLevel=np.zeros(numPts);#down in the plot
+    betaOneMinusalphaLevel=np.zeros(numPts);#up in the plot
+    betaInvHalf=np.zeros(numPts);
     for n in range(numPts):
         m=mRange[n]; #numplessThanThresh=m;
         betaInvHalf[n]=st.beta.ppf(0.5,m,M-m);
@@ -67,11 +67,11 @@ def addqqplotinfo(qnull,M,xl='-log10(P) observed',yl='-log10(P) expected',xlim=N
     if alphalevel is not None:
         if distr == 'log10':
             betaUp, betaDown, theoreticalPvals = _qqplot_bar(M=M,alphalevel=alphalevel,distr=distr)
-            lower = -sp.log10(theoreticalPvals-betaDown)
-            upper = -sp.log10(theoreticalPvals+betaUp)
-            plt.fill_between(-sp.log10(theoreticalPvals), lower, upper, color="grey", alpha=0.5)
-            #plt.plot(-sp.log10(theoreticalPvals),lower,'g-.')
-            #plt.plot(-sp.log10(theoreticalPvals),upper,'g-.')
+            lower = -np.emath.log10(theoreticalPvals-betaDown)
+            upper = -np.emath.log10(theoreticalPvals+betaUp)
+            plt.fill_between(-np.emath.log10(theoreticalPvals), lower, upper, color="grey", alpha=0.5)
+            #plt.plot(-np.emath.log10(theoreticalPvals),lower,'g-.')
+            #plt.plot(-np.emath.log10(theoreticalPvals),upper,'g-.')
     if legendlist is not None:
         leg = plt.legend(legendlist, loc=4, numpoints=1)
         # set the markersize for the legend
@@ -125,7 +125,7 @@ def qqplot(pvals, fileout=None, alphalevel=0.05, legend=None, xlim=None, ylim=No
     for i in range(len(pvallist)):
         pval = pvallist[i].flatten()
         M = pval.shape[0]
-        pnull = (0.5 + sp.arange(M)) / M
+        pnull = (0.5 + np.arange(M)) / M
         # pnull = np.sort(np.random.uniform(size = tests))
 
         pval[pval < minpval] = minpval
@@ -133,13 +133,13 @@ def qqplot(pvals, fileout=None, alphalevel=0.05, legend=None, xlim=None, ylim=No
 
         if distr == 'chi2':
             qnull = st.chi2.isf(pnull, 1)
-            qemp = (st.chi2.isf(sp.sort(pval), 1))
+            qemp = (st.chi2.isf(np.sort(pval), 1))
             xl = 'LOD scores'
             yl = '$\chi^2$ quantiles'
 
         if distr == 'log10':
-            qnull = -sp.log10(pnull)
-            qemp = -sp.log10(sp.sort(pval))  # sorts the object, returns nothing
+            qnull = -np.emath.log10(pnull)
+            qemp = -np.emath.log10(np.sort(pval))  # sorts the object, returns nothing
             xl = '-log10(P) observed'
             yl = '-log10(P) expected'
         if not (sp.isreal(qemp)).all(): raise Exception("imaginary qemp found")
@@ -191,7 +191,7 @@ def estimate_lambda(pv):
     L           lambda value
     ------------------------------------------------------------------
     '''
-    LOD2 = sp.median(st.chi2.isf(pv, 1))
+    LOD2 = np.median(st.chi2.isf(pv, 1))
     L = (LOD2/0.456)
     return L
 
