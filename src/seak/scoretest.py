@@ -42,6 +42,7 @@ import scipy.linalg as LA
 from scipy.optimize import brentq as root
 from scipy.stats import chi2, norm
 import statsmodels.api as sm
+from seak.cppextension import wrap_qfc
 
 from seak.mingrid import minimize1D
 
@@ -242,9 +243,9 @@ class Scoretest:
         return result[0]
 
     @staticmethod
-    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-9):
+    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-7):
         """Given the test statistic (squaredform) and the eigenvalues of GPG computes the corresponding p-value, calls a C script."""
-        # Pia: changed default for acc to 1e-07 as this is the only value the function is ever called with in fastlmm
+
         from seak.cppextension import wrap_qfc
 
         size = coeffs.shape[0]
