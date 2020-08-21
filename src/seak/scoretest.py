@@ -42,6 +42,7 @@ import scipy.linalg as LA
 from scipy.optimize import brentq as root
 from scipy.stats import chi2, norm
 import statsmodels.api as sm
+from seak.cppextension import wrap_qfc
 
 from seak.mingrid import minimize1D
 
@@ -232,8 +233,7 @@ class Scoretest:
             result = Scoretest._qf(squaredform, eigvals)
         except DaviesError:
             logging.warning('Using "saddle" instead of "davies" (likely because "davies" did not converge)')
-            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]  # if Davies method does not converge use
-        # removed keyword argument that corresponds to default.
+            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]  # if Davies method does not converge use saddle
 
         if result[0] == 0.:
             logging.warning('Using "saddle" instead of "davies" (Davies returned 0.)')
@@ -242,10 +242,8 @@ class Scoretest:
         return result[0]
 
     @staticmethod
-    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-9):
+    def _qf(chi2val, coeffs, dof=None, noncentrality=None, sigma=0.0, lim=1000000, acc=1e-7):
         """Given the test statistic (squaredform) and the eigenvalues of GPG computes the corresponding p-value, calls a C script."""
-        # Pia: changed default for acc to 1e-07 as this is the only value the function is ever called with in fastlmm
-        from seak.cppextension import wrap_qfc
 
         size = coeffs.shape[0]
         if dof is None:
