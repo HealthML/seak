@@ -35,7 +35,7 @@ ext_modules = [Extension(name="seak.cppextension.wrap_qfc",
 
 setup(
     name='seak',
-    version='0.1.0',
+    version='0.2.0',
     license='Apache-2.0',
     description='Sequence annotations in kernel-based tests',
     long_description='%s\n%s' % (
