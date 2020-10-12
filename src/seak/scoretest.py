@@ -238,7 +238,11 @@ class Scoretest:
 
         if result[0] == 0.:
             logging.warning('Using "saddle" instead of "davies" (Davies returned 0.)')
-            result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]
+            try:
+                result = [Scoretest._pv_saddle_eig(squaredform, eigvals)]
+            except ValueError:
+                logging.warning('failed to use "saddle" but "davies" returned 0., reporting -1.')
+                result = [-1.0]
 
         return result[0]
 
