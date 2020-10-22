@@ -249,9 +249,6 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
     if np.isnan(lambda0):
         lambda0 = 0
 
-    if len(lambda0) > 1:
-        raise ValueError('len(lambda0) > 1')
-
     if lambda0 > np.exp(log_grid_hi):
         log_grid_hi = np.log(10 * lambda0)
         # print warning
@@ -369,7 +366,7 @@ class LRTnoK():
         if lik1['alteqnull']:
             pv = 1.
         else:
-            pv = chi2.sf(lik1['stat']) * 0.5
+            pv = chi2(1).sf(lik1['stat']) * 0.5
 
         return pv
 
