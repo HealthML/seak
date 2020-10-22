@@ -354,7 +354,7 @@ class VariantLoaderSnpReader(VariantLoader):
             assert isinstance(path_or_bed,
                               SnpReader), 'path_or_bed must either be a path to a bed-file, or an instance of SnpReader.'
             self.bed = path_or_bed
-        self.bed.pos[:, 0] = self.bed.pos[:, 0].astype('str')  # chromosome should be str, stored positions are 1-based
+        self.bed.pos[:, 0] = self.bed.pos[:, 0].astype('str')  # chromosome should be str, stored positions are 1-based. This doesnt' work! :(
         self.iid_fid = pd.DataFrame(self.bed.iid, index=self.bed.iid[:, 1], columns=['fid', 'iid'])
 
     def update_variants(self, vids=None, coordinates=None, exclude=False):
