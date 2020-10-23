@@ -84,7 +84,7 @@ setup(
     ],
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*',
     install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'h5py', 'pandas_plink', 'pyreadr', 'scipy', 'statsmodels',
-                      'matplotlib', 'scikit-learn>=0.21', 'pysnptools'  # eg: 'aspectlib==1.1.1', 'six>=1.7',
+                      'matplotlib', 'scikit-learn>=0.21', 'pysnptools', 'fastlmm'  # eg: 'aspectlib==1.1.1', 'six>=1.7',
                       ],
     extras_require={
         # eg:
