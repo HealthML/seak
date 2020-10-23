@@ -344,7 +344,7 @@ def pv_chi2mixture(stat, scale, dof, mixture, alteqnull=None):
     if alteqnull is None:
         alteqnull = stat == 0.
 
-    pv = chi2.sf(stat/scale,dof) * mixture
+    pv = np.array(chi2.sf(stat/scale,dof) * mixture)
     pv[alteqnull] = 1.
 
     return pv
@@ -362,7 +362,7 @@ def fit_chi2mixture(sims, qmax=0.1):
       "imax"  : number of values used to fit the ditribution
     '''
 
-    mix = chi2mixture(lrt=sims, qmax=qmax, fitdof=True)
+    mix = chi2mixture.chi2mixture(lrt=sims, qmax=qmax, fitdof=True)
     # method described in LRT paper
     res = mix.fit_params_Qreg()
     res['mixture'] = mix.mixture
