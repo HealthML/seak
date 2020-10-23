@@ -2,13 +2,20 @@
 
 import numpy as np
 from scipy.stats import chi2
-from numpy.linalg import svd
-from numpy.linalg import eigvals
+from scipy.linalg import eigh
+from numpy.linalg import svd, LinAlgError
 
-from fastlmm.util.stats import linreg
+from fastlmm.util.stats import linreg, chi2mixture
 from fastlmm.inference import lmm
 
+import logging
+
 def make_lambdagrid(lambda0, gridlength, log_grid_lo, log_grid_hi):
+
+
+    '''
+    Port of the R-function to create the lambda grid (used inside RLRTsim)
+    '''
 
     if lambda0 == 0:
         grid = np.exp(np.linspace(log_grid_lo, log_grid_hi, num=gridlength - 1))
@@ -41,12 +48,13 @@ def make_lambdagrid(lambda0, gridlength, log_grid_lo, log_grid_hi):
     return np.concatenate([np.zeros(1), leftgrid, lambda0, rightgrid])
 
 
-def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
-
-    # this is a port of the c++ function ...
+def rlrsim_loop(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
 
     '''
     Python port of the RLRsim.cpp function using scipy & numpy
+
+    This is a "naive" port with the same loops used in the C++ code
+    It's recommended to use rlrsim() instead, as it's much faster.
 
     :param int p: number of covariates in X
     :param int k: number of variables to test
@@ -79,14 +87,14 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
 
     # broadcast to shape (g, k)
     fN = ((lambd - lambda0)[:, np.newaxis] * mu) / lambdamuP1
-    fD = (1 + lambda0 * mu)[:, np.newaxixs] / lambdamuP1
+    fD = (1 + lambda0 * mu) / lambdamuP1
 
     # shape (g,)
-    sumlog1plambdaxi = np.sum(np.log1p(lambd[:np.newaxis] * xi), axis=1)
+    sumlog1plambdaxi = np.sum(np.log1p(lambd[:,np.newaxis] * xi), axis=1)
 
     # simulations
     res = np.zeros(nsim)
-    lambdaind = np.zeros(nsim)
+    lambdaind = np.zeros(nsim, dtype=np.int)
 
     # replace this loop with map?
     for i_s in range(nsim):
@@ -98,18 +106,14 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
         ChiK = chi2(dfChiK).rvs(1)  # Xnpk
         Chi1 = chi2(1).rvs(k)  # ws^2
 
-        # rchisq(n, df, ncp = 0)
-
         if not REML:
             ChiSum = Chi1.sum()
 
         # loop over lambda values:
-        # replace this loop with broadcasting?
         for i_g in range(g):
 
-            N = fN[i_g, :] * Chi1
-            D = fD[i_g, :] * Chi1
-
+            N = (fN[i_g, :] * Chi1).sum()
+            D = (fD[i_g, :] * Chi1).sum()
             D += ChiK
 
             LR = n0 * np.log1p(N / D) - sumlog1plambdaxi[i_g]
@@ -129,8 +133,8 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
               'fN': fN,
               'fD': fD,
               'sumlog1plambdaxi': sumlog1plambdaxi,
-              'Chi1': Chi1,
-              'ChiK': ChiK,
+              #'Chi1': Chi1,
+              #'ChiK': ChiK,
               'n': n,
               'p': p,
               'dfChik': dfChiK,
@@ -140,87 +144,101 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
     return result
 
 
-def rlrsim_precomputed(res, nsim):
+
+def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
+
 
     '''
     Python port of the RLRsim.cpp function using scipy & numpy
-    Takes pre-computed matrices from a previous simulation as input
+
+    This version uses broadcasting to speed up operations.
+    It uses a lot of memory for large nsim, but is much faster than rlrsim_loop()
+
+    :param int p: number of covariates in X
+    :param int k: number of variables to test
+    :param int n: number of individuals
+    :param int nsim: number of sumulations to perform
+    :param int g: lambda grid length (not used anymore...)
+    :param int q: number of free parameters in the null-model (?)
+    :param np.ndarray mu: array of eigenvalues
+    :param np.ndarray lambd: array of lambda values
+    :param float lambda0: lambda0 value
+    :xi: ?
+    :param bool REML: perform REML (default=True)
+
     '''
 
-    dfChiK = res['dfChiK']
-    REML = res['REML']
+    dfChiK = n - p - k if (n - p - k) > 0 else 0
 
     if REML:
-        n0 = res['n'] - res['p']
+        n0 = n - p
+        xi = mu
     else:
-        n0 = res['n']
+        assert xi is not None, "xi can't be None if REML == False !"
+        n0 = n
 
     # pre-compute stuff that stays constant over simulations
 
-    # shape (g, k)
-    lambdamu = res['lambdamu']
+    # broadcast to shape (g, k)
+    lambdamu = lambd[:, np.newaxis] * mu
+    # (g, k)
+    lambdamuP1 = lambdamu + 1.
 
-    # shape (g, k)
-    fN = res['fN']
-    fD = res['fD']
+    # broadcast to shape (g, k)
+    fN = ((lambd - lambda0)[:, np.newaxis] * mu) / lambdamuP1
+    # (g, k)
+    fD = (1 + lambda0 * mu) / lambdamuP1
 
     # shape (g,)
-    sumlog1plambdaxi = res['sumlog1plambdaxi']
+    sumlog1plambdaxi = np.sum(np.log1p(lambd[:, np.newaxis] * xi), axis=1)
 
     # simulations
-    res = np.zeros(nsim)
-    lambdaind = np.zeros(nsim)
 
-    # replace this loop with map?
-    for i_s in range(nsim):
+    # need nsim values of ChiK
+    # shape (nsim, )
+    ChiK = chi2(dfChiK).rvs(nsim)
 
-        LR = 0.
+    # need (nsim, k) values of Chi1
+    Chi1 = np.reshape(chi2(1).rvs(nsim * k), (nsim, 1, k))
 
-        ChiSum = 0
+    if not REML:
+        # need (nsim, ) values of ChiSum
+        ChiSum = Chi1.sum(axis=1)
 
-        ChiK = chi2(dfChiK).rvs(1)  # Xnpk
-        Chi1 = chi2(1).rvs(fN.shape[1])  # ws^2
+    # fN (g, k) *  Chi1 (nsim, 1, k) -> N (nsim, g, k) -sum-> N (nsim, g)
+    N = np.sum(fN * Chi1, axis=2)
+    # fD (g, k) * Chi1 (nsim, 1, k) -> D (nsim, g, k) -sum-> D (nsim, g)
+    D = np.sum(fD * Chi1, axis=2)
+    # D (nsim, g) + Chik(nsim,) -> D (nsim, g)
+    D += ChiK[:,np.newaxis]
 
-        if not REML:
-            ChiSum = Chi1.sum()
+    # n0 (1,) * log1p(N/D) (nsim, g) -> LR (nsim, g)
+    LR = n0 * np.log1p(N / D)
+    # LR (nsim, g) - ...(g,) -> LR (nsim, g)
+    LR -= sumlog1plambdaxi
 
-        # loop over lambda values:
-        # replace this loop with broadcasting?
+    # (nsim, g) -> lambdaind (nsim,)
+    lambdaind = np.argmax(LR, axis=1)
+    # (nsim, g) -> res (nsim,)
+    res = LR[np.arange(LR.shape[0]), lambdaind]
 
-        for i_g in range(lambdamu.shape[0]):
+    if not REML:
+        res += n * np.log1p(chi2(q).rvs(nsim) / (ChiSum + ChiK))
 
-            N = fN[i_g, :] * Chi1
-            D = fD[i_g, :] * Chi1
-
-            D += ChiK
-
-            LR = n0 * np.log1p(N / D) - sumlog1plambdaxi[i_g]
-
-            if LR >= res[i_s]:
-                res[i_s] = LR
-                lambdaind[i_s] = i_g
-            else:
-                break
-
-        if not REML:
-            res[i_s] = res[i_s] + n0 * np.log1p(chi2(res['q']).rvs(1) / (ChiSum + ChiK))
-
-    result = {'res' : res,
-              'lambdaind': lambdaind,
-              'lambdamu': lambdamu,
-              'fN': fN,
-              'fD': fD,
-              'sumlog1plambdaxi': sumlog1plambdaxi,
-              'Chi1': Chi1,
-              'ChiK': ChiK,
-              'n': res['n'],
-              'p': res['p'],
-              'dfChik': dfChiK,
-              'REML': REML
-              }
+    result = {
+        'res': res,
+        'lambdaind': lambdaind,
+        'lambdamu': lambdamu,
+        'fN': fN,
+        'fD': fD,
+        'sumlog1plambdaxi': sumlog1plambdaxi,
+        'n': n,
+        'p': p,
+        'dfChik': dfChiK,
+        'REML': REML
+    }
 
     return result
-
 
 
 def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000, use_approx=0, log_grid_hi=8,
@@ -267,8 +285,26 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
 
     sqrtSigma = np.eye(Z.shape[1]) if sqrtSigma is None else sqrtSigma
 
-    mu = eigvals(Z - sqrtSigma.T.dot(X.dot(Xdagger.dot(Z)))) ** 2
+    # project out X
+    rZ = Z - X.dot(Xdagger.dot(Z))
+    # correlate by sqrtSigma
+    np.matmul(rZ, sqrtSigma, out=rZ)
 
+    try:
+        mu = svd(rZ, full_matrices=False, compute_uv=False)
+        if np.any(mu < -0.1):
+            logging.warning("kernel contains a negative Eigenvalue")
+        mu *= mu
+    except LinAlgError:  # revert to Eigenvalue decomposition
+        logging.warning(
+            "Got SVD exception, trying eigenvalue decomposition of square of Z. Note that this is a little bit less accurate")
+        mu_ = eigh(rZ.T.dot(rZ), eigvals_only=True)
+        if np.any(mu_ < -0.1):
+            logging.warning("kernel contains a negative Eigenvalue")
+        mu = mu_ * mu_
+        #is it ok if some are 0?
+
+    # normalize
     mu /= np.max(mu)
 
     if use_approx != 0:
@@ -290,7 +326,48 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
                  xi=mu,
                  REML=True)
 
-    return {'res': res, 'lambda': lambda_grid[res['lambdaind']]}
+    res['lambda'] = lambda_grid[res['lambdaind']] if 'lambdaind' in res else np.zeros((1,))
+
+    return res
+
+
+def pv_chi2mixture(stat, scale, dof, mixture, alteqnull=None):
+
+    '''
+    Returns p-values(s) using chi2 with custom parameters
+
+    see LRTnoK.fit_chi2mixture()
+
+    wraps chi2.sf(stat/scale, dof) * mixture
+    '''
+
+    if alteqnull is None:
+        alteqnull = stat == 0.
+
+    pv = chi2.sf(stat/scale,dof) * mixture
+    pv[alteqnull] = 1.
+
+    return pv
+
+
+def fit_chi2mixture(sims, qmax=0.1):
+
+    '''
+    Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression".
+    returns a dictionary:
+
+      "mse"   : mean squared error
+      "dof"   : degrees of freedom
+      "scale" : scale
+      "imax"  : number of values used to fit the ditribution
+    '''
+
+    mix = chi2mixture(lrt=sims, qmax=qmax, fitdof=True)
+    # method described in LRT paper
+    res = mix.fit_params_Qreg()
+    res['mixture'] = mix.mixture
+
+    return res
 
 
 class LRTnoK():
@@ -357,7 +434,7 @@ class LRTnoK():
     def pv_5050(self, lik1=None):
 
         '''
-        p-value calculated assuming a 50/50 mixture of chi2 df0 and chi2 df1
+        Return p-value(s) calculated assuming a 50/50 mixture of chi2 df0 and chi2 df1
         '''
 
         if lik1 is None:
@@ -371,18 +448,25 @@ class LRTnoK():
         return pv
 
 
-    def pv_sim(self, nsim=100000):
+    def pv_sim(self, nsim=100000, seed=420):
 
         '''
-        p-value calculated using 'nsim' simulations
+        Runs "nsim" simulations of the test statistic IF self.model_lik['alteqnull'] is False
+        returns a dictionary with the simulations and empirical p-value.
         '''
 
         lik1 = self.model1_lik
 
         if lik1['alteqnull']:
             pv = 1.
-            return {'p':pv,'sim':np.array([])}
+            result = {
+                'res': np.array([]),
+                'pv': pv
+            }
+            return result
         else:
-            sims = RLRTSim(self.X, self.model1.G, self.Xdagger, nsim=nsim)
-            pv = np.mean(lik1['stat'] < sims)
-            return {'p':pv, 'sim':sims}
+            sims = RLRTSim(self.X, self.model1.G, self.Xdagger, nsim=nsim, seed=seed)
+            pv = np.mean(lik1['stat'] < sims['res'])
+            sims['pv'] = pv
+            return sims
+
