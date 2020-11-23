@@ -309,7 +309,6 @@ class AnnotationLoader:
         :rtype: pandas.Index
         :raises NotImplementedError: Interface.
         """
-git reset HEAD~        raise NotImplementedError
 
 
 class CovariatesLoader:
@@ -479,7 +478,7 @@ class VariantLoaderSnpReader(VariantLoader):
         """
         return self.bed.iid[:, 1]
 
-    def get_vidgit reset HEAD~s(self):
+    def get_vids(self):
         """Returns all variant ids.
 
         :return:
@@ -502,7 +501,7 @@ class PlinkLoader(VariantLoader):
 
     __slots__ = ['bim', 'fam', 'bed']
 
-    def __init__(self, path_to_plink_files_with_prefix)
+    def __init__(self, path_to_plink_files_with_prefix):
         """Constructor."""
         # bim: genotypes variant info; fam: genotypes individual info; bed: genotypes
         self.bim, self.fam, self.bed = read_plink(path_to_plink_files_with_prefix, verbose=False)
