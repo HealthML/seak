@@ -125,7 +125,7 @@ class VariantLoader:
         """Z-score normalizes the genotype data, excluding missing values from computation. If inplace == True, performs
         operations inplace and returns a reference to X itself.
 
-        :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
+src/seak/data_loaders.p        :param numpy.ndarray X: 2D array with dimensions :math:`n*m` with :math:`n:=` number of individuals and :math:`m:=` number of SNVs.
         ::
         :return: z-score normalized array
         :rtype: numpy.ndarray
@@ -212,7 +212,7 @@ class VariantLoader:
             # As pandas-plink reads counts of the major allele --> this is inverted here!
             genotypes = np.abs(genotypes - 2)
 
-        # MAF filtering, filtering of singletons and doubletons
+        # MAF filteringsrc/seak/data_loaders.p, filtering of singletons and doubletons
         # Assumes additive model as 0, 1, 2 (count of minor allele)! (i.e. if pandas_plink was used to read in data,
         # invert_encoding must be used)
 
@@ -367,7 +367,7 @@ class VariantLoaderSnpReader(VariantLoader):
         repeated IDs are ignored.
 
         :param vids: Variant ids to include/exclude
-        :param dict coordinates: genomic coordinates {"chr": str, "start": int, "end": int} to include/exclude
+        :param dict coordinates: genomic coordsrc/seak/data_loaders.pinates {"chr": str, "start": int, "end": int} to include/exclude
         """
         if vids is None and coordinates is None:
             logging.error('Either variant ids or genomic coordinates must be specified to set variants. Both are None.')
@@ -502,7 +502,7 @@ class PlinkLoader(VariantLoader):
 
     __slots__ = ['bim', 'fam', 'bed']
 
-    def __init__(self, path_to_plink_files_with_prefix):
+    def __init__(self, path_to_plink_files_with_prefix):src/seak/data_loaders.p
         """Constructor."""
         # bim: genotypes variant info; fam: genotypes individual info; bed: genotypes
         self.bim, self.fam, self.bed = read_plink(path_to_plink_files_with_prefix, verbose=False)
@@ -966,8 +966,6 @@ class CovariatesLoaderCSV(CovariatesLoader):
 
         if path_to_phenotypes is not None:
             pheno = pd.read_csv(path_to_phenotypes, sep=sep)
-            assert phenotype_of_interest in pheno.columns, 'Error: {} is not a column of {}'.format(phenotype_of_interest, path_to_phenotypes)
-            assert phenotype_of_interest not in self.cov.columns, 'Error: {} found both in covariates and phenotype tables!'
             pheno.rename(columns={pheno.columns[0]: 'iid'}, inplace=True)
             pheno['iid'] = pheno['iid'].astype(str)
             pheno.set_index('iid', inplace=True)
