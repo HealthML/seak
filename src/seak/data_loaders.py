@@ -943,28 +943,39 @@ class CovariatesLoaderCSV(CovariatesLoader):
     Initializes instance of a CovariatesLoader class from a CSV file.
 
     :param str phenotype_of_interest: column name of phenotype that should be loaded
-    :param str path_to_covariates: absolute path to CSV file with phenotype and covariate information
+    :param str path_to_covariates: path to CSV file with phenotype (if path_to_phenotypes is None) and covariates
     :param list(str) covariate_column_names: list of the covariate column names
+    :param str path_to_phenotypes: path to CSV file with phenotype (if stored separately from covariates)
     """
 
     __slots__ = ['cov', 'phenotype_of_interest', 'covariate_column_names']
     # cov: complete data for all individuals of interest with no missing values, no duplicates, no constant columns
     # column named 'iid' with ids to merge with genotypes dataset; 'cov_index'
 
-    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names, sep=','):
+    def __init__(self, phenotype_of_interest, path_to_covariates, covariate_column_names, sep=',', path_to_phenotypes=None):
         """Constructor."""
         if isinstance(phenotype_of_interest, str):
             phenotype_of_interest = [phenotype_of_interest]
         self.phenotype_of_interest = phenotype_of_interest
         self.cov = pd.read_csv(path_to_covariates, sep=sep)
-        ind_col = self.cov.columns[0]
-        print(ind_col)
-        self.cov = self.cov.rename(columns={ind_col: 'iid'})
+
+        self.cov = self.cov.rename(columns={self.cov.columns[0]: 'iid'})
         self.cov['iid'] = self.cov['iid'].astype(str)
+
         self.cov.set_index(keys='iid', inplace=True, drop=False)
+
+        if path_to_phenotypes is not None:
+            pheno = pd.read_csv(path_to_phenotypes, sep=sep)
+            assert phenotype_of_interest in pheno.columns, 'Error: {} is not a column of {}'.format(phenotype_of_interest, path_to_phenotypes)
+            assert phenotype_of_interest not in self.cov.columns, 'Error: {} found both in covariates and phenotype tables!'
+            pheno.rename(columns={pheno.columns[0]: 'iid'}, inplace=True)
+            pheno['iid'] = pheno['iid'].astype(str)
+            pheno.set_index('iid', inplace=True)
+            pheno = pheno[phenotype_of_interest]
+            self.cov = self.cov.join(pheno)
+
         # Only consider individuals for which information on all covariates and phenotype is available!
-        # As Stefan did in the script: UKBiobank_2_SKAT_SKATO
-        # The sample index is called eid instead of iid here!
+
         self.covariate_column_names = covariate_column_names
 
         # Drop all individuals with incomplete covariate or phenotype information
@@ -972,8 +983,8 @@ class CovariatesLoaderCSV(CovariatesLoader):
         nb_of_ind = self.cov.shape[0]
         self.cov = self.cov[cov_pheno_and_ids].dropna()
         nb_of_ind_complete = self.cov.shape[0]
-        logging.warning('{} individuals/samples were dropped because of incomplete covariate or phenotype '
-                        'information.'.format(nb_of_ind-nb_of_ind_complete))
+        logging.warning('{} individuals/samples were dropped because of incomplete covariate or phenotype information.'.format(nb_of_ind-nb_of_ind_complete))
+
 
     def update_individuals(self, iids, exclude=False):
         """Set individuals to include/exclude.
