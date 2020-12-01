@@ -24,6 +24,7 @@ from pandas_plink import read_plink  # utilities to read 1-based plink files
 logging.basicConfig(format='%(asctime)s - %(lineno)d - %(message)s')
 
 # TODO: allow for multi-intersection based on intervalarray or similar
+# TODO: make intersections based on coordintes "fool proof" -> convert XYM chromosomes to numbers when intersecting with snpreader
 
 def intersect_ids(ar1, ar2):
     """
@@ -381,8 +382,11 @@ class VariantLoaderSnpReader(VariantLoader):
             else:
                 self.bed = self.bed[:, idx_bed[np.argsort(idx_query)]]
         else:
-            mask = (self.bed.pos[:, 0].astype(str) == coordinates['chrom']) & (self.bed.pos[:, 2] > coordinates['start']) & (
-                    self.bed.pos[:, 2] <= coordinates['end'])
+            try:
+                mask = (self.bed.pos[:, 0] == float(coordinates['chrom'])) & (self.bed.pos[:, 2] > coordinates['start']) & (
+                    self.bed.pos[:, 2] <= coordinates['end'])  # pos is one based, coordinates are 0 based half open
+            except ValueError as e:
+                raise ValueError('Chromosome identifiers need to be convertible to numbers!: \n{}'.format(e))
             if exclude:
                 self.bed = self.bed[:, ~mask]
             else:
@@ -422,9 +426,12 @@ class VariantLoaderSnpReader(VariantLoader):
         :rtype: (numpy.ndarray, pandas.Index, pandas.Series)
         """
         # only keep genotypes/veps_index_bed for selected region (genotype info)
+        try:
+            mask = (self.bed.pos[:, 0] == float(coordinates['chrom'])) & (self.bed.pos[:, 2] > coordinates['start']) & (
+                    self.bed.pos[:, 2] <= coordinates['end']) # pos is one based, coordinates are 0 based half open
+        except ValueError as e:
+            raise ValueError('Chromosome identifiers need to be convertible to numbers!: \n{}'.format(e))
 
-        mask = (self.bed.pos[:, 0].astype(str) == coordinates['chrom']) & (self.bed.pos[:, 2] > coordinates['start']) & (
-                self.bed.pos[:, 2] <= coordinates['end']) # pos is one based, coordinates are 0 based half open
 
         if mask.sum() == 0:
             logging.warning('No variants were found for the region {}.'.format(coordinates))
@@ -1016,7 +1023,7 @@ class CovariatesLoaderCSV(CovariatesLoader):
 
         pheno = self.phenotype_of_interest[0] if pheno is None else pheno
 
-        print('Get one hot covariates and phenotype')
+        #print('Get one hot covariates and phenotype')
         one_hot_covariates = pd.get_dummies(self.cov[self.covariate_column_names], prefix_sep='_', drop_first=True)
 
         # Drop invariant covariates
