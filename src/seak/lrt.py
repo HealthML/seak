@@ -287,8 +287,7 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
 
     # project out X
     rZ = Z - X.dot(Xdagger.dot(Z))
-    # correlate by sqrtSigma
-    np.matmul(rZ, sqrtSigma, out=rZ)
+    np.matmul(rZ, sqrtSigma.T, out=rZ)
 
     try:
         mu = svd(rZ, full_matrices=False, compute_uv=False)
