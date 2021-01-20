@@ -373,8 +373,8 @@ class ScoretestNoK(Scoretest):
         :return dict: dictionary with two slots: "beta" and "var_beta"
         '''
 
-        if G1.ndim() == 1:
-            G1 = G1[:,np.newaxis]
+        if G1.ndim == 1:
+            G1 = G1[:, np.newaxis]
 
         assert G1.shape[1] == 1, 'Error: this is only supported for single variables'
 
