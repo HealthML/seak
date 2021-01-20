@@ -364,6 +364,33 @@ class ScoretestNoK(Scoretest):
         super().__init__(phenotypes, covariates)
         self.RxY, self.Xdagger, self.sigma2 = self._compute_null_model()
 
+    def coef(self, G1):
+
+        '''
+        Returns single-variant regression coefficients and their estimated variances
+
+        :param numpy.ndarray G1: N x 1 vector
+        :return dict: dictionary with two slots: "beta" and "var_beta"
+        '''
+
+        if G1.ndim() == 1:
+            G1 = G1[:,np.newaxis]
+
+        assert G1.shape[1] == 1, 'Error: this is only supported for single variables'
+
+        RxG, self.Xdagger = super()._linreg(Y=G1, X=self.X, Xdagger=self.Xdagger)
+
+        denom = G1.T.dot(RxG)
+
+        beta_hat = G1.T.dot(self.RxY) / denom
+
+        residuals = (self.RxY - RxG.dot(beta_hat))
+        sigma2 = (residuals * residuals).sum() / (self.N - self.D - 1)
+
+        var_beta_hat = sigma2 / denom
+
+        return {'beta':beta_hat, 'var_beta':var_beta_hat}
+
     def _compute_null_model(self):
         """Computes parameters of null model."""
         # residual of y regressed on X, which here, is equivalent to sigma2*Py (P is the projection matrix, which is idempotent)
