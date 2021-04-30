@@ -30,7 +30,15 @@ The ``kernels`` module
     :members:
     :undoc-members:
     :show-inheritance:
-
+    
+    
+The ``lrt`` module
+******************************************
+.. automodule:: seak.lrt
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    
 
 The ``scoretest`` module
 ******************************************
