@@ -21,6 +21,10 @@ extensions = [
 ]
 
 bibtex_bibfiles=['references.bib']
+apidoc_module_dir='../src'
+apidoc_output_dir = 'reference'
+apidoc_excluded_paths = ['tests']
+apidoc_separate_modules = True
 
 source_suffix = '.rst'
 master_doc = 'index'
