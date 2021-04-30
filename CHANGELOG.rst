@@ -6,3 +6,8 @@ Changelog
 ------------------
 
 * Public release.
+
+
+0.3.0 (2021-04-30)
+
+* Added likelihood ratio tests and updated documentation

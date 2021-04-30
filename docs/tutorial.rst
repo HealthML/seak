@@ -4,131 +4,181 @@
 Tutorial
 =========
 
-Performing a two variance component score tests with seak
+Score test and likelihood ratio test with a single variance component
 ---------------------------------------------------------
-This example illustrates how to perform a two variance component score test with :mod:`seak`.
 
 
 .. code-block:: python
 
-  # Small example for usage of two variance component model with background kernel
-  # Imports
   import pkg_resources
 
   import pandas as pd
-
-  from seak import construct_background_kernel
+  import h5py
+  
+  import numpy as np
   from seak import data_loaders
   from seak import kernels
   from seak import scoretest
-
+  from seak import lrt
+  
+  
   # Paths to input data
   # Path to package dummy data
   data_path = pkg_resources.resource_filename('seak', 'data/')
-
+  
   # Path to veps
   path_to_VEP_bed = data_path + "dummy_veps.bed"
   path_to_VEP_hdf5 = data_path + "dummy_veps.hdf5"
-
+  
   # Path to genotypes
   path_to_covariates = data_path + "dummy_covariates_fixed.csv"
-  path_to_plink_files_with_prefix = data_path + "full_rank_continuous"
-
+  bedfilepath = data_path + "full_rank_continuous.bed"
+  
   # Path to regions
   path_to_reference_genes_bed = data_path + "dummy_regions.bed"
-
+  
   # Path to background kernel
-  path_to_plink_bg_kernel = data_path + "full_rank_background_kernel"
-
+  path_to_bg_kernel_bed = data_path + "full_rank_background_kernel.bed"
+  
   # Load data
   # Variant effect predictions
+  # path_to_VEP_bed is a UCSC BED-file containing the variant positions and names  
+  # path_to_VEP_hdf5 is a HDF5 file containing variant effect predictions.
+  
   hdf5_loader = data_loaders.Hdf5Loader(path_to_vep_bed=path_to_VEP_bed,
                                         path_to_vep_hdf5=path_to_VEP_hdf5,
                                         hdf5_key='diffscore')
-
+  
+  # the diffscore dataset contains 100 variants with 160 predictions each, which can be directly accessed with the "veps" attribute
+  hdf5_loader.veps.shape
+  
+  # the loader can be indexed with variant ids
+  hdf5_loader.anno_by_id(hdf5_loader.get_vids()[0:3]).shape
+  
+  # we can set a mask to only load sepecific predictions
+  mask = np.zeros(hdf5_loader.veps.shape[1])
+  mask[9] = 1. # get only the 10th prediction
+  mask = mask.astype(bool)
+  hdf5_loader.set_mask(mask)
+  
+  # the loader now only returns the 10th prediction
+  hdf5_loader.anno_by_id(hdf5_loader.get_vids()[0:3]).shape
+  
   # Genotypes
-  plink_loader = data_loaders.PlinkLoader(path_to_plink_files_with_prefix=path_to_plink_files_with_prefix)
-
-  # Genomic regions
-  ucsc_region_loader = data_loaders.BEDRegionLoader(path_to_regions_UCSC_BED=path_to_reference_genes_bed,
-                                                    chrom_to_load=1,
-                                                    drop_non_numeric_chromosomes=True)
-
+  plink_loader = data_loaders.VariantLoaderSnpReader(bedfilepath)
+  
+  # this loader can also be accessed by variant ids
+  G, vid = plink_loader.genotypes_by_id(plink_loader.get_vids()[0])
+  # additionally, this loader can also be accessed by region, as is shown later...
+  
+  # individual ids can be accessed as follows
+  plink_loader.get_iids()[0:3] # first 3 individuals
+  
   # Covariate data
+  # this loader handles standard operations like adding a bias column and converting categorical variables using one-hot encoding
+  # path_to_covariates is a csv containing the phenotype (pheno_full_rank_continuous) and covariates (cov1, cov2)
   covariate_loader_csv = data_loaders.CovariatesLoaderCSV(phenotype_of_interest='pheno_full_rank_continuous',
                                                           path_to_covariates=path_to_covariates,
                                                           covariate_column_names=['cov1', 'cov2'])
-
-  # Background_kernel
-  background_kernel = construct_background_kernel.GRMLoader(path_to_plink_files_with_prefix=path_to_plink_bg_kernel,
-                                                            blocksize=200,
-                                                            LOCO_chrom_id=1)
-
-  # Intersects and updates data sets, computes background kernel for matched data
-  data_loaders.intersect_and_update_datasets(
-      test='2K',
-      variantloader=plink_loader,
-      covariateloader=covariate_loader_csv,
-      annotationloader=hdf5_loader,
-      grmloader=background_kernel)
-
+  # phenotypes can also be contained in a seperate file defined with path_to_phenotypes (default: read phenotypes and covariates from the same file)
+  
+  
+  # Intersects the different datasets
+  # intersects variants (between the variantloader and annotationloader)
+  # intersects individuals (between the variantloader and covariatesloader)
+  # we could also do this manually. This function is added for convenience
+  # by specifying "noK" we indicate that we will not use a "background kernel"
+  data_loaders.intersect_and_update_datasets(test='noK',
+                                             variantloader=plink_loader,
+                                             covariateloader=covariate_loader_csv,
+                                             annotationloader=hdf5_loader)
+  
   # Get one-hot encoded phenotypes and covariates for association tests
-  Y, X = covariate_loader_csv.get_one_hot_covariates_and_phenotype(test_type='2K')
-  null_model = scoretest.Scoretest2K(Y, X, background_kernel.K0, background_kernel.G0)
-
-  # Save information of interest in pandas dataframe
-  results = pd.DataFrame(columns=['name', 'chrom', 'start', 'end', 'p_value', 'n_SNVs'])
-
-  # Iterate over regions and compute p-values for sets of variants
-  for index, region in ucsc_region_loader.regions.iterrows():
-      temp_genotypes_info_dict = region.to_dict()
-
-      # Get set of variants based on region annotations
-      temp_genotypes, temp_vids = plink_loader.genotypes_by_region(region)
-
-      # Check whether any variants lie within respective region
+  Y, X = covariate_loader_csv.get_one_hot_covariates_and_phenotype(test_type='noK')
+  
+  # initialize the null model for the score test
+  model_score = scoretest.ScoretestNoK(Y, X)
+  
+  # initialize the null model for the likelihood ratio test
+  model_lrt = lrt.LRTnoK(X, Y)
+  
+  regions = data_loaders.BEDRegionLoader(path_to_regions_UCSC_BED=path_to_reference_genes_bed, chrom_to_load=1, drop_non_numeric_chromosomes=True)
+  
+  def get_G1(r):
+      temp_genotypes, temp_vids, temp_pos = plink_loader.genotypes_by_region(r, return_pos=True)
       if temp_genotypes is None:
-          continue
-
-      # Preprocess genotypes
-      G, temp_vids = data_loaders.VariantLoader.preprocess_genotypes(genotypes=temp_genotypes,
-                                                                     vids=temp_vids,
-                                                                     impute_mean=True,
-                                                                     center=False,
-                                                                     scale=False)
-
-      # Check whether any variants remain after preprocessing
+          return temp_genotypes, temp_vids, temp_pos # all will be None
+      G, vids = plink_loader.preprocess_genotypes(genotypes=temp_genotypes,
+                                                       vids=temp_vids,
+                                                       impute_mean=True,
+                                                       center=True,
+                                                       scale=False)
       if G is None:
-        continue
-
-    # Get respective variant effect predictions based on vids
-    V = hdf5_loader.anno_by_id(temp_vids)
-
-    # Apply kernel function of choice to genotypes G including prior knowledge
-    # in form of variant effect predictions V
-    GV = kernels.phi(kernels.diffscore_max, G, V)
-
-    # Compute p-value
-    temp_p_value = null_model.pv_alt_model(GV)
-
-
-    # Save temporary results
-    temp_genotypes_info_dict['p_value'] = temp_p_value
-    temp_genotypes_info_dict['n_SNVs'] = G.shape[1]
-
-    # Append temporary results to final dataframe
-    results = results.append(temp_genotypes_info_dict, ignore_index=True)
-
+          return G, vids, temp_pos # all will be None
+      else:
+          return G, temp_vids, temp_pos[[x in temp_vids for x in vids]]
+      
+  
+  results = []
+  simulations = []
+      
+  # Iterate over regions
+  for i, region in enumerate(regions):
+  
+      result = {}
+      
+      # Get set of variants based on region annotations
+      G1, vids, pos = get_G1(region)
+  
+      if G1 is None:
+          continue
+          
+      # Get respective variant effect predictions based on vids
+      V = hdf5_loader.anno_by_id(vids)
+      
+      # set weights
+      weights = np.sqrt(np.abs(V))[:,0]
+  
+      # weighted linear kernel
+      GV = G1.dot(np.diag(weights))
+      
+      result['region'] = region['name']
+      result['n_variants'] = GV.shape[1]
+      
+      # score test
+      # p-value for the score-test
+      result['pv_score'] = model_score.pv_alt_model(GV)
+      
+      # LRT 
+      # fit alternative model
+      altmodel = model_lrt.altmodel(G1)
+      
+      # LRT test statistic
+      result['lrt_stat'] = altmodel['stat']
+      
+      if altmodel['alteqnull']:
+          # alternative model is less likely than the null model -> p-value = 1.
+          result['pv_lrt_empirical'] = 1.
+          result['lrt_alteqnull'] = 1
+      else:
+          # alternative is more likeliy than the null model, simulate test statistics
+          sim = model_lrt.pv_sim(nsim=10000, seed=i) # simulate 10,000 test statistics for the current alternative
+          simulations.append(sim['res'])
+          result['pv_lrt_empirical'] = sim['pv']
+          result['lrt_alteqnull'] = 0
+          
+      results.append(result)
+  
+  results = pd.DataFrame.from_dict(results)
+  
+  # fit a chi2 mixture distribution to the simulated test statistics:
+  chi2param = lrt.fit_chi2mixture(np.concatenate(simulations), qmax=0.1)
+  
+  chi2param
+  
+  results['pv_lrt'] = 1.
+  
+  # p-values for the LRT calculated with the mixture distribution 
+  results.loc[~results.lrt_alteqnull.astype(bool),'pv_lrt'] = lrt.pv_chi2mixture(results.loc[~results.lrt_alteqnull.astype(bool),'lrt_stat'].values, chi2param['scale'], chi2param['dof'], chi2param['mixture'])
+  
   results
-
-  #        name chrom start  end   p_value n_SNVs
-  # 0   region1     1     0   10  0.401793     10
-  # 1   region2     1    10   20  0.376850     10
-  # 2   region3     1    20   30  0.545177     10
-  # 3   region4     1    30   40  0.286926     10
-  # 4   region5     1    40   50  0.276154     10
-  # 5   region6     1    50   60  0.649827     10
-  # 6   region7     1    60   70  0.872293     10
-  # 7   region8     1    70   80  0.533158     10
-  # 8   region9     1    80   90  0.324089     10
-  # 9  region10     1    90  100  0.066610      9
