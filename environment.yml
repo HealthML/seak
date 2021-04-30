@@ -4,3 +4,8 @@ dependencies:
     - scipy
     - numpy
     - cython
+    - pip    
+- pip:
+  - sphinxcontrib-bibtex
+  - sphinx-rtd-theme
+  - sphinx>=1.3
