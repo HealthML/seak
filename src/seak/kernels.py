@@ -1,9 +1,9 @@
 """
 
-Kernel functions that can incorporate prior knowledge into set-association tests.
+Functions that can incorporate prior knowledge into set-association tests.
 
 Any function that takes a genotype matrix G, variant effects V, and optional additional arguments and returns a set of
-transformed genotypes/variables to be tested
+transformed genotypes/variables to be tested.
 
 """
 
@@ -11,8 +11,6 @@ transformed genotypes/variables to be tested
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 
-# TODO: change the way this works. fewer kernels, more customizability.
-# chainable set of operations: subsetting, aggregating along effects, aggregating along SNPs ?
 
 # Kernel functions
 def diffscore_max(G, V, scale_sqrt=True):
