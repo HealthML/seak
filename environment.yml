@@ -1,0 +1,6 @@
+name: seak
+dependencies:
+    - mkl==2019.4 # needed for FaST-LMM build
+    - scipy
+    - numpy
+    - cython
