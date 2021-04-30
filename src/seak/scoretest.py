@@ -1,4 +1,4 @@
-"""Contains classes for score-based set-association tests.
+"""Contains classes for variance component score tests.
 
 A single kernel and two-kernel score-based test is available for a linear link function (continuous phenotypes) (:class:`ScoretestNoK` and :class:`Scoretest2K`).
 With the second kernel :math:`K_0` correcting for population structure.
@@ -21,8 +21,8 @@ Alternative model two-kernel:
 .. math:: y = {\\alpha} X + {\\beta} G_0 + {\\gamma} G_1 + {\\epsilon}
 
 With: :math:`X`: covariates, dimension :math:`nxc` (:math:`n:=` number of individuals, :math:`c:=` number of covariates),
-:math:`G_0`: SNVs to construct the background kernel :math:`K_0` from, correcting for population structure, dimensions :math:`nxm` (:math:`n:=` number of individuals, :math:`m:=` number of SNVs/variants),
-:math:`G_1`: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs in set to test association for).
+:math:`G_0`: variants to construct the background kernel :math:`K_0` from, correcting for population structure, dimensions :math:`nxm` (:math:`n:=` number of individuals, :math:`m:=` number of variants/variants),
+:math:`G_1`: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants in set to test association for).
 
 .. note:: For all classes of the module :mod:`scoretest` the class attributes are instance attributes! This is a bug in the automatic documentation.
 
@@ -167,7 +167,7 @@ class Scoretest:
     def pv_alt_model(self, G1, G2=None, method='davies'):
         """Computes p-value of the alternative model.
 
-        :param numpy.ndarray G1: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs to test association for)
+        :param numpy.ndarray G1: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants to test association for)
         :return: p-value of the alternative model
         :rtype: float
         """
@@ -194,7 +194,7 @@ class Scoretest:
         """Method that returns the score-based test statistic (squaredform) and the matrix (1/2)xG.TxPthetaxG (GPG) from
         which the null distribution can be efficiently computed for a set of genotypes.
 
-        :param numpy.ndarray G1: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs to test association for)
+        :param numpy.ndarray G1: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants to test association for)
         :return: squaredform, GPG
         :raises: NotImplementedError - Interface.
         """
@@ -204,7 +204,7 @@ class Scoretest:
         """Method that returns the conditional score-based test statistic (squaredform) for G1 conditioned on G2 and the
         matrix (1/2)xG.TxPthetaxG (GPG) from which the null distribution can be efficiently computed for a set of genotypes.
 
-        :param numpy.ndarray G1: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs to test association for)
+        :param numpy.ndarray G1: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants to test association for)
         :return: squaredform, GPG
         :raises: NotImplementedError - Interface.
         """
@@ -315,7 +315,9 @@ class Scoretest:
         lmax = np.min(1 / (2 * lambd[lambd > 0.])) * 0.99999
 
         try:
-            hatzeta = root(lambda zeta: kprime0(zeta) - x, lmin, lmax, maxiter=1000)
+            def func(zeta):
+                return kprime0(zeta) - x
+            hatzeta = root(func, lmin, lmax, maxiter=1000)
         except RuntimeError as e:
             logging.warning('P-value computation did not converge:\n{}'.format(e))
             return np.nan
@@ -347,7 +349,7 @@ class ScoretestNoK(Scoretest):
     .. math:: Y = {\\alpha} X + {\\gamma} G_1 + {\\epsilon}
 
     With: :math:`X`: covariates, dimension :math:`nxc` (:math:`n:=` number of individuals, :math:`c:=` number of covariates)
-    :math:`G_1`: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs in set to test association for)
+    :math:`G_1`: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants in set to test association for)
 
     :param numpy.ndarray phenotypes: :math:`nx1` matrix containing the phenotype (:math:`n:=` number of individuals)
     :param numpy.ndarray covariates: :math:`nxc` matrix containing the covariates (:math:`n:=` number of individuals, :math:`c:=` number of covariates)
@@ -540,8 +542,8 @@ class Scoretest2K(Scoretest):
     .. math:: Y = {\\alpha} X + {\\beta} G_0 + {\\gamma} G_1 + {\\epsilon}
 
     With: :math:`X`: covariates, dimension :math:`nxc` (:math:`n:=` number of individuals, :math:`c:=` number of covariates)
-    :math:`G_0`: SNVs to construct the background kernel :math:`K_0` from, correcting for population structure, dimensions :math:`nxm` (:math:`n:=` number of individuals, :math:`m:=` number of SNVs/variants)
-    :math:`G_1`: set of SNVs to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of SNVs in set to test association for)
+    :math:`G_0`: variants to construct the background kernel :math:`K_0` from, correcting for population structure, dimensions :math:`nxm` (:math:`n:=` number of individuals, :math:`m:=` number of variants/variants)
+    :math:`G_1`: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants in set to test association for)
 
     :param numpy.ndarray phenotypes: :math:`nx1` matrix containing the phenotype (:math:`n:=` number of individuals)
     :param numpy.ndarray covariates: :math:`nxc` matrix containing the covariates (:math:`n:=` number of individuals, :math:`c:=` number of covariates)

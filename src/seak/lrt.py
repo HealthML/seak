@@ -1,4 +1,19 @@
+"""Contains classes and functions for Likelihood ratio tests.
 
+The class :class:`LRTnoK` implements the set-based likelihood ratio test for continuous phenotypes. A background kernel is not supported.
+
+Null model:
+
+.. math:: y = {\\alpha} X + {\\epsilon}
+
+Alternative model:
+
+.. math:: y = {\\alpha} X + {\\gamma} G_1 + {\\epsilon}
+
+With: :math:`X`: covariates, dimension :math:`nxc` (:math:`n:=` number of individuals, :math:`c:=` number of covariates),
+:math:`G_1`: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants in set to test association for).
+
+"""
 
 import numpy as np
 from scipy.stats import chi2
@@ -12,9 +27,10 @@ import logging
 
 def make_lambdagrid(lambda0, gridlength, log_grid_lo, log_grid_hi):
 
-
     '''
-    Port of the R-function to create the lambda grid (used inside RLRTsim)
+    Port of the R-function to create the lambda grid (used inside RLRTsim).
+
+    Creates a grid of lambda values to optimize over.
     '''
 
     if lambda0 == 0:
@@ -33,7 +49,7 @@ def make_lambdagrid(lambda0, gridlength, log_grid_lo, log_grid_hi):
         # leftdistance approx. 1 ==> make a regular grid, since
         # (1 +- epsilon)^((1:n)/n) makes a too concentrated grid
         if (np.abs(leftdistance - 1) < 0.3):
-            leftgrid = np.linspace(np.exp(log_grid_lo), lambda0, length=leftlength + 1)[:-1]
+            leftgrid = np.linspace(np.exp(log_grid_lo), lambda0, num=leftlength + 1)[:-1]
         else:
             leftdiffs = np.where([leftdistance > 1] * leftlength - 1,
                                   leftdistance ** (np.arange(2, leftlength + 1) / leftlength) - leftdistance ** (1. / leftlength),
@@ -54,19 +70,9 @@ def rlrsim_loop(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
     Python port of the RLRsim.cpp function using scipy & numpy
 
     This is a "naive" port with the same loops used in the C++ code
-    It's recommended to use rlrsim() instead, as it's much faster.
+    It's recommended to use rlrsim() instead, as it's much faster. This function is mainly here for documentation purposes.
 
-    :param int p: number of covariates in X
-    :param int k: number of variables to test
-    :param int n: number of individuals
-    :param int nsim: number of sumulations to perform
-    :param int g: lambda grid length
-    :param int q: number of free parameters in the null-model (?)
-    :param np.ndarray mu: array of eigenvalues
-    :param np.ndarray lambd: array of lambda values
-    :param float lambda0: lambda0 value
-    :xi: ?
-    :param bool REML: perform REML (default=True)
+    See :func:`rlrsim`
 
     '''
 
@@ -152,7 +158,7 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
     Python port of the RLRsim.cpp function using scipy & numpy
 
     This version uses broadcasting to speed up operations.
-    It uses a lot of memory for large nsim, but is much faster than rlrsim_loop()
+    It uses a lot of memory for large nsim, but is way faster than rlrsim_loop()
 
     :param int p: number of covariates in X
     :param int k: number of variables to test
@@ -160,8 +166,8 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
     :param int nsim: number of sumulations to perform
     :param int g: lambda grid length (not used anymore...)
     :param int q: number of free parameters in the null-model (?)
-    :param np.ndarray mu: array of eigenvalues
-    :param np.ndarray lambd: array of lambda values
+    :param numpy.ndarray mu: array of eigenvalues
+    :param numpy.ndarray lambd: array of lambda values
     :param float lambda0: lambda0 value
     :xi: ?
     :param bool REML: perform REML (default=True)
@@ -245,19 +251,28 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
             log_grid_lo=-10, gridlength=200):
 
     '''
-    Python port of the RLRTsim function using scipy & numpy
+    Python port of the LRTSim function using scipy & numpy
+    see https://cran.r-project.org/web/packages/RLRsim/RLRsim.pdf for details, also
+    Crainiceanu, C. and Ruppert, D. (2004) Likelihood ratio tests in linear mixed models with one variance component
 
-    :param np.ndarray X: covariate matrix X (design matrix)
-    :param np.ndarray Z: variables to test
-    :param np.ndarray Xdagger: Xdagger
-    :param np.ndarray sqrtSigma: upper triangular factor of the cholesky decomposition of the correlation matrix Sigma
-    :param np.ndarray lambda0:
+    :param numpy.ndarray X: The fixed effects design matrix of the model under the alternative
+    :param numpy.ndarray Z: The random effects design matrix of the model under the alternative (i.e. G_1)
+    :param numpy.ndarray Xdagger: Moore-Penrose pseudo-inverse of X
+    :param numpy.ndarray sqrtSigma: The upper triangular Cholesky factor of the correlation matrix of the random effect
+    :param numpy.ndarray lambda0:
     :param seed: numpy random seed to use
-    :param int nsim: number of simulations to run
+    :param int nsim: Number of values to simulate
     :param int use_approx: Not implemented (yet)
-    :param log_grid_hi:
-    :param log_grid_lo:
-    :param int gridlength: length of the lambda grid
+    :param log_grid_hi: Higher value of the grid on the log scale.
+    :param log_grid_lo: Lower value of the grid on the log scale.
+    :param int gridlength: Length of the grid for the grid search over lambda
+
+    :return: A dictionary containing the simulations and other parameters
+    :rtype: dict
+
+    Output dictionary:
+      "res":  np.array of simulated test statistics
+       ...:   parameters and intermediate variables used to generate simulated test statistics
 
     '''
 
@@ -333,11 +348,21 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
 def pv_chi2mixture(stat, scale, dof, mixture, alteqnull=None):
 
     '''
-    Returns p-values(s) using chi2 with custom parameters
+    Returns p-values(s) using chi2 with custom parameters.
 
-    see LRTnoK.fit_chi2mixture()
+    see :func:`fit_chi2mixture`
 
     wraps chi2.sf(stat/scale, dof) * mixture
+
+    :param stat: The LRT test statistic
+    :type stat: Union[float, np.array]
+    :param float scale: scaling factor applied to the test statistic
+    :param float dof: degrees of freedom
+    :param float mixture: mixture weight
+
+    :return: p-value
+    :rtype: float
+
     '''
 
     if alteqnull is None:
@@ -352,9 +377,16 @@ def pv_chi2mixture(stat, scale, dof, mixture, alteqnull=None):
 def fit_chi2mixture(sims, qmax=0.1):
 
     '''
-    Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression".
-    returns a dictionary:
+    Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression" (Listgarten 2013).
+    returns a dictionary.
 
+    :param numpy.ndarray sims: array of tests statistics
+    :param float qmax: fraction of largest test statistics to fit the distribution with
+
+    :return: Dictionary with chi2 mixture parameters
+    :rtype: dict
+
+    Output dictionary:
       "mse"   : mean squared error
       "dof"   : degrees of freedom
       "scale" : scale
@@ -371,8 +403,22 @@ def fit_chi2mixture(sims, qmax=0.1):
 
 class LRTnoK():
 
-    '''
-    barebone version of "lrt" in FaST-LMM
+    '''Single kernel Likelihood Ratio Test (LRT) for continuous phenotypes.
+
+    Sets up null model for given phenotypes and covariates.
+    Use :func:`altmodel` to fit an alternative model, and calculate the LRT test statistic.
+    Use :func:`pv_sim` to simulate test statistics and generate empirical p-values.
+
+    :param numpy.ndarray X: :math:`nxc` matrix containing the covariates (:math:`n:=` number of individuals, :math:`c:=` number of covariates)
+    :param numpy.ndarray Y: :math:`nx1` matrix containing the phenotype (:math:`n:=` number of individuals)
+    :param bool REML: use restricted maximum likelihood? (only "True" has been tested)
+
+    :ivar X: X
+    :ivar Y: Y
+    :ivar Xdagger: Moore-Penrose pseudo-inverse of X
+    :ivar model0: dictionary with nLL of the null model
+    :ivar model1: dictionary with nLL and other parameters of the alternative model
+
     '''
 
     def __init__(self, X, Y, REML=True):
@@ -392,7 +438,7 @@ class LRTnoK():
 
 
     def _nullmodel(self, REML=True):
-
+        # initialize the null model
         self.model0 = {}
         model = linreg(self.X, self.Y[:,0])
         self.model0['h2'] = np.nan
@@ -400,21 +446,25 @@ class LRTnoK():
 
     def altmodel(self, G1):
 
-        '''
+        """Fit alternative model. Returns a dictionary with model parameters and test statistic.
+
+        :param numpy.ndarray G1:  :math:`G_1`: set of variants (i.e. variables) to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants in set to test association for)
+
+        :return: Dictionary of fitted model parameters
+        :rtype: dict
+
         Output dictionary:
         'nLL'       : negative log-likelihood
         'sigma2'    : the model variance sigma^2
-        'stat'      : rlrt test statistic
-        'alteqnull' : h2 is 0 or negative
+        'stat'      : LRT test statistic
+        'alteqnull' : h2 is 0 or negative (i.e. p-value is 1.)
         'beta'      : [D*1] array of fixed effects weights beta
         'h2'        : mixture weight between Covariance and noise
         'REML'      : True: REML was computed, False: ML was computed
         'a2'        : mixture weight between K0 and K1
-        'dof'       : Degrees of freedom of the Multivariate student-t
-                        (default None uses multivariate Normal likelihood)
         'scale'     : Scale parameter that multiplies the Covariance matrix (default 1.0)
         --------------------------------------------------------------------------
-        '''
+        """
         # use FaST-LMM's implementation
         lmm1 = lmm.LMM()
         lmm1.setG(G1)
@@ -432,9 +482,16 @@ class LRTnoK():
 
     def pv_5050(self, lik1=None):
 
-        '''
-        Return p-value(s) calculated assuming a 50/50 mixture of chi2 df0 and chi2 df1
-        '''
+        """
+        Return p-value(s) calculated assuming a 50/50 mixture of chi2 df0 and chi2 df1. Considered a conservative estimate.
+        If lik1 is None, returns the p-value for the current alternative model.
+
+        :param lik1: likelihood ratio test statistic
+        :type lik1: Union[float, numpy.ndarray]
+
+        :rtype: Union[float, numpy.ndarray]
+
+        """
 
         if lik1 is None:
             lik1 = self.model1_lik
@@ -450,8 +507,19 @@ class LRTnoK():
     def pv_sim(self, nsim=100000, seed=420):
 
         '''
-        Runs "nsim" simulations of the test statistic IF self.model_lik['alteqnull'] is False
-        returns a dictionary with the simulations and empirical p-value.
+        Runs "nsim" simulations of the test statistic IF the likelihood of the alternative model is greater than that of the null model, i.e. self.model_lik['alteqnull'] is False.
+        returns a dictionary with the simulations and empirical p-value. The empirical p-value is 1. if self.model_lik['alteqnull'] is True, and the array of simulated test statistics will be empty.
+
+        :param int nsim: Number of simulated test statistics to return
+        :param int seed: numpy random seed to use for simulations
+
+        :return: Dictionary with containing the simulated test statistics, and empirical p-value
+        :rtype: dict
+
+        Output dictionary:
+          "res": array of simulated test statistics
+          "pv":  empirical p-value of current alternative model
+
         '''
 
         lik1 = self.model1_lik

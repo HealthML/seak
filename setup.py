@@ -83,7 +83,7 @@ setup(
         # eg: 'keyword1', 'keyword2', 'keyword3',
     ],
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*',
-    install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'h5py', 'pandas_plink', 'pyreadr', 'scipy', 'statsmodels',
+    install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'h5py', 'scipy', 'statsmodels',
                       'matplotlib', 'scikit-learn>=0.21', 'pysnptools', 'fastlmm'  # eg: 'aspectlib==1.1.1', 'six>=1.7',
                       ],
     extras_require={
