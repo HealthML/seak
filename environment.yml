@@ -1,8 +1,12 @@
+# environment to build docs
 name: seak
 dependencies:
     - python>=3.5
     - mkl==2019.4 # needed for FaST-LMM build
     - scipy
+    - statsmodels
+    - sklearn
+    - pandas 
     - numpy
     - cython
     - pip
@@ -10,3 +14,4 @@ dependencies:
         - sphinxcontrib-bibtex
         - sphinx-rtd-theme
         - sphinx>=1.3
+        - fastlmm
