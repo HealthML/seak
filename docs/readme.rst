@@ -9,11 +9,11 @@ of prior knowledge, such as variant effect predictions or other annotations, int
 The mathematical implementation of these tests is based on :mod:`FaST-LMM-Set` :cite:`Listgarten2013` :cite:`Lippert2014`.
 
 Two types of association tests are available, namely to score test (:mod:`seak.scoretest`) and the likelihood ratio test (LRT, :mod:`seak.lrt`).
-While the score test is computationally more efficient, the LRT has potentially higher power:cite:`Listgarten2013`.
+While the score test is computationally more efficient, the LRT has potentially higher power :cite:`Listgarten2013`.
 
 The score test is available for continuous (:class:`seak.scoretest.ScoretestLogit`) and binary phenotypes (:class:`seak.scoretest.ScoretestNoK`),
 and can correct for (cryptic) relatedness and population stratification using a two random effects model (:class:`seak.scoretest.Scoretest2K`, continuous phenotypes only).
-P-values are calculated using either Davie's exact method :cite:`Davies1980`, or saddle point approximation :cite:`Kuonen1990`.
+P-values are calculated using either Davie's exact method :cite:`Davies1980`, or saddle point approximation :cite:`Kuonen1999`.
 
 The LRT is implemented for continuous phenotypes (:class:`seak.lrt.LRTnoK`).  LRT test statistics can be sampled using the fast implementations described in :cite:`Scheipl2008`.
 
@@ -39,6 +39,7 @@ Tutorial
 ========
 A small example illustrating how to perform score- and likelihood ratio tests is shown in: :ref:`Tutorial`.
 
+A pipeline using :mod:`seak` to perform functionally informed association tests on UK Biobank data is available `here <https://github.com/HealthML/faatpipe>`_
 
 References
 =============
