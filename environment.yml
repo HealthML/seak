@@ -5,7 +5,7 @@ dependencies:
     - mkl==2019.4 # needed for FaST-LMM build
     - scipy
     - statsmodels
-    - sklearn
+    - scikit-learn
     - pandas 
     - numpy
     - cython
