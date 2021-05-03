@@ -11,4 +11,9 @@ sphinx:
 
 conda:
   environment: environment.yml
-   
+
+python:
+  install:
+  - method: pip
+    path: .
+
