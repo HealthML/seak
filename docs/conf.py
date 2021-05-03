@@ -4,8 +4,12 @@ from __future__ import unicode_literals
 import os
 import sys
 
-# Include package path
-sys.path.insert(0, os.path.abspath('../src'))
+# on_rtd is whether we are on readthedocs.org
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+
+if not on_rtd:
+    # Include package path
+    sys.path.insert(0, os.path.abspath('../src'))
 
 extensions = [
     'sphinx.ext.autodoc',
@@ -40,8 +44,6 @@ extlinks = {
     'issue': ('https://github.com/HealthML/seak/issues/%s', '#'),
     'pr': ('https://github.com/HealthML/seak/pull/%s', 'PR #'),
 }
-# on_rtd is whether we are on readthedocs.org
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 if not on_rtd:  # only set the theme if we're building docs locally
     html_theme = 'sphinx_rtd_theme'

@@ -5,7 +5,7 @@ Tutorial
 =========
 
 Score test and likelihood ratio test with a single variance component
----------------------------------------------------------
+---------------------------------------------------------------------
 
 
 .. code-block:: python
