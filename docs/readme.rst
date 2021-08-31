@@ -4,14 +4,20 @@ Overview
 
 :mod:`seak`, which stands for **se**\ quence **a**\ nnotations in **k**\ ernel-based tests, is an open-source Python
 software package for performing set-based genotype-phenotype association tests. It allows for the flexible incorporation
-of prior knowledge, such as variant effect predictions, or other annotations, into variant association tests via kernel
-functions.  The mathematical implementation of these tests is based on
-:mod:`FaST-LMM-Set` :cite:`Listgarten2013` :cite:`Lippert2014`. It can correct for population and family structure as well as
-cryptic relatedness in a two random effects model (:class:`seak.scoretest.Scoretest2K`) for continuous phenotypes.
-Furthermore, it also implements a one random effect model with a linear (:class:`seak.scoretest.ScoretestNoK`)
-and a logistic (:class:`seak.scoretest.ScoretestLogit`) link function. Associations are tested in variance component score tests.
+of prior knowledge, such as variant effect predictions or other annotations, into these association tests.
 
-Seak provides interfaces for all data loading functionalities (:mod:`seak.data_loaders`) in order to maximize flexibility. This way users can easily adapt the package to the input data types of their choice.
+The mathematical implementation of these tests is based on :mod:`FaST-LMM-Set` :cite:`Listgarten2013` :cite:`Lippert2014`.
+
+Two types of association tests are available, namely to score test (:mod:`seak.scoretest`) and the likelihood ratio test (LRT, :mod:`seak.lrt`).
+While the score test is computationally more efficient, the LRT has potentially higher power :cite:`Listgarten2013`.
+
+The score test is available for continuous (:class:`seak.scoretest.ScoretestLogit`) and binary phenotypes (:class:`seak.scoretest.ScoretestNoK`),
+and can correct for (cryptic) relatedness and population stratification using a two random effects model (:class:`seak.scoretest.Scoretest2K`, continuous phenotypes only).
+P-values are calculated using either Davie's exact method :cite:`Davies1980`, or saddle point approximation :cite:`Kuonen1999`.
+
+The LRT is implemented for continuous phenotypes (:class:`seak.lrt.LRTnoK`).  LRT test statistics can be sampled using the fast implementations described in :cite:`Scheipl2008`.
+
+Seak provides interfaces for data loading functionalities (:mod:`seak.data_loaders`) in order to maximize flexibility. This way users can easily adapt the package to the input data types of their choice.
 
 * Free software: Apache Software License 2.0
 
@@ -31,13 +37,14 @@ For a reference documenting all public modules included in :mod:`seak` meant for
 
 Tutorial
 ========
-A small example illustrating how to perform a two variance component score test with :mod:`seak` is shown in: :ref:`Tutorial`.
+A small example illustrating how to perform score- and likelihood ratio tests is shown in: :ref:`Tutorial`.
 
+A pipeline using :mod:`seak` to perform functionally informed association tests on UK Biobank data is available `here <https://github.com/HealthML/faatpipe>`_
 
 References
 =============
 
-The score-based association tests implemented in :mod:`seak.scoretest` are adapted from `FaST-LMM <https://github.com/fastlmm/FaST-LMM>`_.
+For more information on FaST-LMM visit `FaST-LMM <https://github.com/fastlmm/FaST-LMM>`_.
 
 .. bibliography:: references.bib
     :style: unsrt

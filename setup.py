@@ -35,7 +35,7 @@ ext_modules = [Extension(name="seak.cppextension.wrap_qfc",
 
 setup(
     name='seak',
-    version='0.2.0',
+    version='0.3.0',
     license='Apache-2.0',
     description='Sequence annotations in kernel-based tests',
     long_description='%s\n%s' % (
@@ -65,6 +65,7 @@ setup(
         # 'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         # 'Programming Language :: Python :: Implementation :: CPython',
         # 'Programming Language :: Python :: Implementation :: PyPy',
         # uncomment if you test on these interpreters:
@@ -83,8 +84,10 @@ setup(
         # eg: 'keyword1', 'keyword2', 'keyword3',
     ],
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*',
-    install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'h5py', 'scipy', 'statsmodels',
-                      'matplotlib', 'scikit-learn>=0.21', 'pysnptools', 'fastlmm'  # eg: 'aspectlib==1.1.1', 'six>=1.7',
+
+    install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'cython', 'h5py', 'scipy', 'statsmodels',
+                      'matplotlib', 'scikit-learn>=0.21', 'pysnptools', 'fastlmm'
+
                       ],
     extras_require={
         # eg:

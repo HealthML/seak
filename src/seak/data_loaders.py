@@ -459,6 +459,9 @@ class VariantLoaderSnpReader(VariantLoader):
         :rtype: (numpy.ndarray, pandas.Index)
         """
 
+        if isinstance(vids, str):
+            vids = np.array([vids])
+
         if missing_ok:
             vids, idx_query, _ = np.intersect1d(vids, self.bed.sid, return_indices=True)
             vids = vids[np.argsort(idx_query)]
@@ -596,8 +599,12 @@ class Hdf5Loader(AnnotationLoader):
         :return: variant effect predictions for given variants
         :rtype: numpy.ndarray
         """
-        veps_indices = self.veps_index_df.loc[vids]['veps_nindex'].values
-        veps = self.veps[veps_indices, :][:, self._mask]
+        try:
+            veps_indices = self.veps_index_df.loc[vids]['veps_nindex'].values
+            veps = self.veps[veps_indices, :][:, self._mask]
+        except AttributeError:  # handle case where only a single prediction is requested
+            veps_indices = self.veps_index_df.loc[vids]['veps_nindex']
+            veps = self.veps[[veps_indices], :][:, self._mask]
 
         if shuffle is not None:
             # Shuffles effects for variants among individuals

@@ -168,6 +168,9 @@ class Scoretest:
         """Computes p-value of the alternative model.
 
         :param numpy.ndarray G1: set of variants to test, dimensions :math:`nxk` (:math:`n:=` number of individuals, :math:`k:=` number of variants to test association for)
+
+        :param numpy.ndarray G2: set of variants to condition on (:math:`n:=` number of individuals, :math:`k:=` number of variants to condition on)
+
         :return: p-value of the alternative model
         :rtype: float
         """
