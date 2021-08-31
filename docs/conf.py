@@ -36,7 +36,7 @@ project = 'seak'
 year = '2020'
 author = 'Pia Rautenstrauch & Remo Monti'
 copyright = '{0}, {1}'.format(year, author)
-version = release = '0.3.0'
+version = release = '0.4.0'
 
 pygments_style = 'trac'
 templates_path = ['.']
