@@ -192,7 +192,7 @@ def estimate_lambda(pv):
     ------------------------------------------------------------------
     '''
     LOD2 = np.median(st.chi2.isf(pv, 1))
-    L = (LOD2/0.456)
+    L = (LOD2/st.chi2(1).median())
     return L
 
 
