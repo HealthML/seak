@@ -44,6 +44,28 @@ def test_lrt():
     assert sims['pv'] == 0.353, 'pv_sim() output changed. should be 0.353, is {}. Check LRTnoK.pv_sim()'.format(sims['pv'])
 
 
+def test_estimate_pointmass0_null():
+
+    from seak.lrt import estimate_pointmass0_null
+    import numpy as np
+    from numpy import isclose
+
+    mass0 = estimate_pointmass0_null(np.array([0.9, 0.1]), 10, 2, nsim=10, seed=1)
+
+    assert isclose(mass0, 0.6), 'Error: seak.lrt.estimate_pointmass0_null() failed unit test!'
+
+
+def test_pv_chi2mixture():
+
+    from seak.lrt import pv_chi2mixture
+    from numpy import isclose
+
+    pv = pv_chi2mixture(5., 1., 1., mixture=0.5)
+
+    assert isclose(pv, 0.01267366), 'Error: seak.lrt.test_pv_chi2mixture failed unit test!'
+
+
+
 
 
 
