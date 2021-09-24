@@ -27,10 +27,9 @@ def read(*names, **kwargs):
         return fh.read()
 
 
-ext_modules = [Extension(name="seak.cppextension.wrap_qfc",
-                         language="c++",
-                         sources=["src/seak/cppextension/wrap_qfc.cpp", "src/seak/cppextension/QFC.cpp"],
-                         include_dirs=[numpy.get_include()])]  # , define_macros=macros)]
+ext_modules = [ Extension(name="seak.cppextension.wrap_qfc", language="c++", sources=["src/seak/cppextension/wrap_qfc.cpp", "src/seak/cppextension/QFC.cpp"], include_dirs=[numpy.get_include()]),
+                Extension(name="seak.optimizer", sources=["src/seak/optimizer.pyx"], include_dirs=[numpy.get_include()])]
+
 #ext_modules = cythonize([Extension("seak.cppextension.wrap_qfc", ["src/seak/cppextension/wrap_qfc.pyx", "src/seak/cppextension/QFC.cpp"], include_dirs=[numpy.get_include()])])
 
 setup(
@@ -87,7 +86,6 @@ setup(
 
     install_requires=['numpy>=1.17.2', 'pandas>=0.25.3', 'cython', 'h5py', 'scipy', 'statsmodels',
                       'matplotlib', 'scikit-learn>=0.21', 'pysnptools', 'fastlmm'
-
                       ],
     extras_require={
         # eg:
@@ -99,5 +97,5 @@ setup(
             'seak = seak.cli:main',
         ]
     },
-    ext_modules=ext_modules,
+    ext_modules=cythonize(ext_modules),
 )
