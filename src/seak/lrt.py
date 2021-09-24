@@ -16,16 +16,20 @@ With: :math:`X`: covariates, dimension :math:`nxc` (:math:`n:=` number of indivi
 """
 
 import numpy as np
+from numpy.lib.scimath import logn
+import scipy as sp
 from scipy.stats import chi2
 from scipy.linalg import eigh
 from numpy.linalg import svd, LinAlgError
 
-from fastlmm.util.stats import linreg, chi2mixture
+import logging
+
+import fastlmm.util.mingrid as mingrid
+from fastlmm.util.stats import linreg
 from fastlmm.inference import lmm
 
 from seak.optimizer import optimize_lambda
 
-import logging
 
 def make_lambdagrid(lambda0, gridlength, log_grid_lo, log_grid_hi):
 
@@ -253,7 +257,7 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
     '''
     Python port of the RLRsim.cpp function using scipy & numpy
 
-    This version uses broadcasting + cython to speed up operations. It is about 3 times faster than the numpy-version.
+    This version uses broadcasting + cython to speed up operations. It is about 3-10 times faster than the numpy-version (rlrsim_np).
 
     :param int p: number of covariates in X
     :param int k: number of variables to test
@@ -430,33 +434,253 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
     return res
 
 
+def estimate_pointmass0_null(mu, n, p, nsim=100000, xi=None, seed=None, REML=True):
+
+    '''
+    The point mass of the null distribution of the (R)LRT at 0 can be approximated by
+    the probability of the (R)LRT test statistic having a local maximum at 0.
+    See Crainiceanu, Ruppert: Likelihood ratio tests in linear mixed models
+                              with one variance component (2003), Equations (8) & (9)
+    and Zhou: Boosting Gene Mapping Power and Efficiency with Efficient Exact Variance
+              Component Tests of Single Nucleotide Polymorphism Sets (2016)
+    :param numpy.ndarray mu: Eigenvalues of the Genotype matrix with covariates projected out
+    :param float n: Number of individuals
+    :param float p: Number of fixed effect parameters (covariates)
+    :param float nsim: Number of simulations to perform (default: 100,000)
+    :param numpy.ndarray xi: Eigenvalues of the Genotype matrix, if REML == False
+    :param int: numpy seed
+    :param REML: use REML? (default: True)
+    :return: The probability of having point-mass at null
+    :rtype: float
+    '''
+
+    if REML:
+        n0 = n - p
+        xi = mu
+    else:
+        assert xi is not None, "xi can't be None if REML == False !"
+        n0 = n
+
+    k = len(mu)
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    lhs = np.reshape(chi2(1).rvs(nsim * k), (nsim, k)).dot(mu) / chi2(n0).rvs(nsim)
+
+    if REML:
+        rhs = 1 / (n - p) * mu.sum()
+    else:
+        rhs = 1 / n * xi.sum()
+
+    return (lhs <= rhs).sum() / nsim
+
+
 def pv_chi2mixture(stat, scale, dof, mixture, alteqnull=None):
 
     '''
     Returns p-values(s) using chi2 with custom parameters.
-
     see :func:`fit_chi2mixture`
-
     wraps chi2.sf(stat/scale, dof) * mixture
-
     :param stat: The LRT test statistic
     :type stat: Union[float, np.array]
     :param float scale: scaling factor applied to the test statistic
     :param float dof: degrees of freedom
     :param float mixture: mixture weight
-
     :return: p-value
     :rtype: float
-
     '''
 
     if alteqnull is None:
         alteqnull = stat == 0.
 
-    pv = np.array(chi2.sf(stat/scale,dof) * mixture)
+    pv = np.array(chi2.sf(stat/scale, dof) * mixture)
     pv[alteqnull] = 1.
 
     return pv
+
+class chi2mixture(object):
+    '''
+    mixture here denotes the weight on the non-zero dof compnent
+    '''
+    __slots__ = ['scale', 'dof', 'mixture', 'imax', 'lrt', 'scalemin', 'scalemax',
+                 'dofmin', 'dofmax', 'qmax', 'tol', 'isortlrt', 'qnulllrtsort',
+                 'lrtsort', 'alteqnull', 'abserr', 'fitdof']
+
+    def __init__(self, lrt, mixture=None, tol=0.0, scalemin=0.1, scalemax=5.0,
+                 dofmin=0.1, dofmax=5.0, qmax=None, alteqnull=None, abserr=None, fitdof=None, dof=None):
+        '''
+        Direct adaptation of FaST-LMMs chi2mixture class. The only difference is that mixture can be passed as an
+        argument.
+        Input:
+        lrt             [Ntests] vector of test statistics
+        a2 (optional)   [Ntests] vector of model variance parameters
+        top (0.0)       tolerance for matching zero variance parameters or lrts
+        scalemin (0.1)  minimum value used for fitting the scale parameter
+        scalemax (5.0)  maximum value used for fitting scale parameter
+        dofmin (0.1)    minimum value used for fitting the dof parameter
+        dofmax (5.0)    maximum value used for fitting dof parameter
+        qmax (None)      only the top qmax quantile is used for the fit
+        '''
+        self.lrt = lrt
+        self.alteqnull = alteqnull
+        self.scale = None
+        self.dof = dof
+        self.mixture = mixture
+        self.scalemin = scalemin
+        self.scalemax = scalemax
+        self.dofmin = dofmin
+        self.dofmax = dofmax
+        self.qmax = qmax
+        self.tol = tol
+        self.__fit_mixture()
+        self.isortlrt = None
+        self.abserr = abserr
+        self.fitdof = fitdof
+
+    def __fit_mixture(self):
+        '''
+        fit the mixture component
+        '''
+        if self.tol < 0.0:
+            logging.info('tol has to be larger or equal than zero.')
+        if self.alteqnull is None:
+            self.alteqnull = self.lrt == 0
+            logging.info("WARNING: alteqnull not provided, so using alteqnull=(lrt==0)")
+        if self.mixture is None:
+            self.mixture = 1.0 - (np.array(self.alteqnull).sum() * 1.0) / (np.array(self.alteqnull).shape[0] * 1.0)
+        return self.alteqnull, self.mixture
+
+    def fit_params_Qreg(self):
+        '''
+        Fit the scale and dof parameters of the model by minimizing the squared error between
+        the model log quantiles and the log P-values obtained on the lrt values.
+        Only the top qmax quantile is being used for the fit (self.qmax is used in fit_scale_logP).
+        '''
+        if self.isortlrt is None:
+            self.isortlrt = self.lrt.argsort()[::-1]
+            self.qnulllrtsort = (0.5 + np.arange(self.mixture * self.isortlrt.shape[0])) / (self.mixture * self.isortlrt.shape[0])
+            self.lrtsort = self.lrt[self.isortlrt]
+        resmin = [None]  # CL says it had to be a list or wouldn't work, even though doesn't make sense
+        if self.fitdof:  # fit both scale and dof
+            def f(x):
+                res = self.fit_scale_logP(dof=x)
+                if (resmin[0] is None) or (res['mse'] < resmin[0]['mse']):
+                    resmin[0] = res
+                return res['mse']
+        else:
+            def f(x):  # fit only scale
+                scale = x
+                mse, imax = self.scale_dof_obj(scale, self.dof)
+                if (resmin[0] is None) or (resmin[0]['mse'] > mse):
+                    resmin[0] = {  # bookeeping for CL's mingrid.minimize1D
+                        'mse': mse,
+                        'dof': self.dof,
+                        'scale': scale,
+                        'imax': imax,
+                    }
+                return mse
+        min = mingrid.minimize1D(f=f, nGrid=10, minval=self.dofmin, maxval=self.dofmax)
+        self.dof = resmin[0]['dof']
+        self.scale = resmin[0]['scale']
+        self.imax = resmin[0]['imax']
+        return resmin[0]
+
+    def fit_scale_logP(self, dof=None):
+        '''
+        Extracts the top qmax lrt values to do the fit.
+        '''
+
+        if dof is None:
+            dof = self.dof
+        resmin = [None]
+
+        def f(x):
+            scale = x
+            err, imax = self.scale_dof_obj(scale, dof)
+            if (resmin[0] is None) or (resmin[0]['mse'] > err):
+                resmin[0] = {  # bookeeping for CL's mingrid.minimize1D
+                    'mse': err,
+                    'dof': dof,
+                    'scale': scale,
+                    'imax': imax,
+                }
+            return err
+
+        min = mingrid.minimize1D(f=f, nGrid=10, minval=self.scalemin, maxval=self.scalemax)
+        return resmin[0]
+
+    def scale_dof_obj(self, scale, dof):
+        base = np.exp(1)  # fitted params are invariant to this logarithm base (i.e.10, or e)
+
+        nfalse = (len(self.alteqnull) - np.sum(self.alteqnull))
+
+        imax = int(np.ceil(self.qmax * nfalse))  # of only non zer dof component
+        p = st.chi2.sf(self.lrtsort[0:imax] / scale, dof)
+        logp = logn(base, p)
+        r = logn(base, self.qnulllrtsort[0:imax]) - logp
+        if self.abserr:
+            err = np.absolute(r).sum()
+        else:  # mean square error
+            err = (r * r).mean()
+        return err, imax
+
+
+def fit_chi2mixture(sims, mixture=None, qmax=0.1):
+
+    '''
+    Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression" (Listgarten 2013).
+    returns a dictionary. When mixture parameter is given it only fits scale and dof.
+    :param numpy.ndarray sims: array of tests statistics
+    :param float mixture: mixture weight
+    :param float qmax: fraction of largest test statistics to fit the distribution with
+    :return: Dictionary with chi2 mixture parameters
+    :rtype: dict
+    Output dictionary:
+      "mse"   : mean squared error
+      "dof"   : degrees of freedom
+      "scale" : scale
+      "imax"  : number of values used to fit the ditribution
+    '''
+
+    mix = chi2mixture(lrt=sims, qmax=qmax, mixture=mixture, fitdof=True)
+    # method described in LRT paper
+    res = mix.fit_params_Qreg()
+    res['mixture'] = mix.mixture
+
+    return res
+
+
+def fit_chi2_moment_matching(sims):
+
+    """
+    Fits a chi2 distribution using moment matching (as in Zhou 2016)
+    
+    This has not been tested and is not recommended.
+    
+    :param sims: array of LRT test statistics (continuous part of the distribution)
+    :return: Dictionary of distribution parameters estimated with Moment Matching (MM)
+    """
+
+    scale = np.var(sims) / (2 * np.mean(sims))
+    dof = 2 * (np.mean(sims) ** 2) / np.var(sims)
+
+    return {'scale': scale, 'dof': dof}
+
+
+def fit_chi2_maximum_likelihood(sims):
+    """
+    Fits a chi2 distribution using Maximum Likelihood. (wraps the sci)
+    
+    This has not been tested and is not recommended.
+    
+    :param sims: array of LRT test statistics (continuous part of the distribution)
+    :return: Dictionary of distribution parameters estimated with Maximum Likelihood (ML)
+    """
+
+    dof, _, scale = chi2.fit(sims, floc=0.)
+
+    return {'scale': scale, 'dof': dof}
 
 
 def fit_chi2mixture(sims, qmax=0.1):
@@ -464,6 +688,8 @@ def fit_chi2mixture(sims, qmax=0.1):
     '''
     Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression" (Listgarten 2013).
     returns a dictionary.
+    
+    This is the preferred method.
 
     :param numpy.ndarray sims: array of tests statistics
     :param float qmax: fraction of largest test statistics to fit the distribution with
