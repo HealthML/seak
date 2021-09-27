@@ -106,7 +106,7 @@ def rlrsim_loop(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
 
     # simulations
     res = np.zeros(nsim)
-    lambdaind = np.zeros(nsim, dtype=np.int)
+    lambdaind = np.zeros(nsim, dtype=int)
 
     # replace this loop with map?
     for i_s in range(nsim):
@@ -310,11 +310,11 @@ def rlrsim(p, k, n, nsim, g, q, mu, lambd, lambda0, xi=None, REML=True):
         ChiSum = Chi1.sum(axis=1)
     else:
         ChiSum = np.zeros((nsim,), dtype=float)
-        
+
     # this is the part that we want to optimize:
     res = np.zeros(nsim, dtype=float)
     lambdaind = np.zeros(nsim, dtype=int)
-        
+
     optimize_lambda(res, lambdaind, nsim, g, n0, ChiSum, ChiK, Chi1, sumlog1plambdaxi, fN, fD)
 
     if not REML:
@@ -616,7 +616,7 @@ class chi2mixture(object):
         nfalse = (len(self.alteqnull) - np.sum(self.alteqnull))
 
         imax = int(np.ceil(self.qmax * nfalse))  # of only non zer dof component
-        p = st.chi2.sf(self.lrtsort[0:imax] / scale, dof)
+        p = sp.stats.chi2.sf(self.lrtsort[0:imax] / scale, dof)
         logp = logn(base, p)
         r = logn(base, self.qnulllrtsort[0:imax]) - logp
         if self.abserr:
@@ -626,38 +626,13 @@ class chi2mixture(object):
         return err, imax
 
 
-def fit_chi2mixture(sims, mixture=None, qmax=0.1):
-
-    '''
-    Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression" (Listgarten 2013).
-    returns a dictionary. When mixture parameter is given it only fits scale and dof.
-    :param numpy.ndarray sims: array of tests statistics
-    :param float mixture: mixture weight
-    :param float qmax: fraction of largest test statistics to fit the distribution with
-    :return: Dictionary with chi2 mixture parameters
-    :rtype: dict
-    Output dictionary:
-      "mse"   : mean squared error
-      "dof"   : degrees of freedom
-      "scale" : scale
-      "imax"  : number of values used to fit the ditribution
-    '''
-
-    mix = chi2mixture(lrt=sims, qmax=qmax, mixture=mixture, fitdof=True)
-    # method described in LRT paper
-    res = mix.fit_params_Qreg()
-    res['mixture'] = mix.mixture
-
-    return res
-
-
 def fit_chi2_moment_matching(sims):
 
     """
     Fits a chi2 distribution using moment matching (as in Zhou 2016)
-    
+
     This has not been tested and is not recommended.
-    
+
     :param sims: array of LRT test statistics (continuous part of the distribution)
     :return: Dictionary of distribution parameters estimated with Moment Matching (MM)
     """
@@ -671,9 +646,9 @@ def fit_chi2_moment_matching(sims):
 def fit_chi2_maximum_likelihood(sims):
     """
     Fits a chi2 distribution using Maximum Likelihood. (wraps the sci)
-    
+
     This has not been tested and is not recommended.
-    
+
     :param sims: array of LRT test statistics (continuous part of the distribution)
     :return: Dictionary of distribution parameters estimated with Maximum Likelihood (ML)
     """
@@ -683,15 +658,16 @@ def fit_chi2_maximum_likelihood(sims):
     return {'scale': scale, 'dof': dof}
 
 
-def fit_chi2mixture(sims, qmax=0.1):
+def fit_chi2mixture(sims, mixture=None, qmax=0.1):
 
     '''
     Takes simulated test statistics as input. Fits a chi2 mixture to them using "quantile regression" (Listgarten 2013).
-    returns a dictionary.
-    
+    returns a dictionary.When mixture parameter is given it only fits scale and dof.
+
     This is the preferred method.
 
     :param numpy.ndarray sims: array of tests statistics
+    :param float mixture: mixture weight
     :param float qmax: fraction of largest test statistics to fit the distribution with
 
     :return: Dictionary with chi2 mixture parameters
@@ -704,7 +680,7 @@ def fit_chi2mixture(sims, qmax=0.1):
       "imax"  : number of values used to fit the ditribution
     '''
 
-    mix = chi2mixture.chi2mixture(lrt=sims, qmax=qmax, fitdof=True)
+    mix = chi2mixture(lrt=sims, qmax=qmax, mixture=mixture, fitdof=True)
     # method described in LRT paper
     res = mix.fit_params_Qreg()
     res['mixture'] = mix.mixture
@@ -746,6 +722,7 @@ class LRTnoK():
         self._nullmodel(REML=REML)
         self.model1 = None
         self.likalt={}
+        self.REML = REML
 
 
     def _nullmodel(self, REML=True):
@@ -848,3 +825,60 @@ class LRTnoK():
             sims['pv'] = pv
             return sims
 
+ def pv_sim_chi2(self, nsim=300, nsim0=100000, simzero=True, method='QR', seed=420, qmax=0.1):
+
+        """
+        Calculate a gene-specific p-value by simulating nsim test statistics and estimating the mixture distribution
+        as in Zhou 2016.
+
+        :param int nsim: Number of simulations for the (R)LRT test statistic
+        :param int nsim0: Number of simulations to estimate point-mass at 0
+        :param str method: Method used to fit continuous part of the the chi2 mixure distribution. 'MM' -> moment matching, 'ML' -> maximum likelihood or 'QR' -> Quantile regression
+        :param float qmax: Use only the values in the top qmax quantile to fit the chi2 distribution. This only affects the QR-method
+        :param bool simzero: Whether to separately run simulations for the estimation of the mixture parameter (default: True). This makes sense if nsim0 >> nsim
+        :return: dictionary similar to that returned by pv_sim(), but with additional slots for estimated dof, scale and mixture parameters for the chi2 distribution
+        """
+
+        lik1 = self.model1_lik
+
+        if lik1['alteqnull']:
+            pv = 1.
+            result = {
+                'res': np.array([]),
+                'pv': pv,
+                'mixture': 0.
+            }
+            return result
+        else:
+            sims = RLRTSim(self.X, self.model1.G, self.Xdagger, nsim=nsim, seed=seed)
+
+            if simzero:
+                mass0 = estimate_pointmass0_null(sims['mu'], sims['n'], sims['p'], nsim=nsim0, seed=seed*2, REML=self.REML)
+            else:
+                mass0 = (sims['res'] == 0.).sum() / nsim
+
+            if method == 'MM':
+                logging.warning('Method "MM" (Moment Matching) is not tested and may not be accurate.')
+                nonzero = sims['res'] != 0.
+                chi2param = fit_chi2_moment_matching(sims['res'][nonzero])
+                imax = nonzero.sum()
+            elif method == 'ML':
+                logging.warning('Method "ML" (Maximum Likelihood) is not tested and may not be accurate.')
+                nonzero = sims['res'] != 0.
+                chi2param = fit_chi2_maximum_likelihood(sims['res'][nonzero])
+                imax = nonzero.sum()
+            elif method == 'QR':
+                chi2param = fit_chi2mixture(sims['res'], qmax=qmax, mixture=1.-mass0)
+                imax = chi2param['imax']
+            else:
+                raise NotImplementedError('Method "{}" not implemented, use either "MM", "ML" or "QR"'.format(method))
+
+            pv = pv_chi2mixture(lik1['stat'], scale=chi2param['scale'], dof=chi2param['dof'], mixture=1.-mass0)
+
+            sims['pv'] = pv
+            sims['scale'] = chi2param['scale']
+            sims['dof'] = chi2param['dof']
+            sims['mixture'] = 1-mass0
+            sims['imax'] = imax
+
+            return sims
