@@ -17,7 +17,7 @@ P-values are calculated using either Davie's exact method :cite:`Davies1980`, or
 
 The LRT is implemented for continuous phenotypes (:class:`seak.lrt.LRTnoK`).  LRT test statistics can be sampled using the fast implementations described in :cite:`Scheipl2008`.
 
-The module :mod:`seak.cct` implements the Cauchy Combination Test (CCT, :cite:`liu2020cauchy`), as implemented in the R STAAR package.
+The module :mod:`seak.cct` implements the Cauchy Combination Test (CCT, :cite:`liu2020cauchy`), as implemented in the [STAAR R-package](https://github.com/xihaoli/STAAR).
 
 If you use the functions in the modules listed above, please also cite the original authors.
 
