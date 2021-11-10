@@ -44,6 +44,8 @@ from scipy.stats import chi2, norm
 import statsmodels.api as sm
 from seak.cppextension import wrap_qfc
 
+from numpy.linalg import LinAlgError
+
 from seak.mingrid import minimize1D
 
 # set logging configs
@@ -468,7 +470,11 @@ class ScoretestNoK(Scoretest):
         G2tPG1 = GPG[n1:, 0:n1]
 
         # conditioning of the test statistics:
-        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
+        try:
+            G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
+        except LinAlgError:
+            logging.warning('Singular matrix encountered when conditioning on G2. Cannot calculate inverse. Check your inputs. Using approximate method instead (numpy.linalg.pinv). Result might be inaccurate.')
+            G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.pinv(G2tPG2))
 
         # conditional G1tPG1 -> GPG
         GPG = G1tPG1 - G1tPG2_G2tPG2inv.dot(G2tPG1)
@@ -790,7 +796,11 @@ class Scoretest2K(Scoretest):
         G2tPG1 = GPG[n1:, 0:n1]
 
         # conditioning of the test statistics:
-        G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
+        try:
+            G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.inv(G2tPG2))
+        except LinAlgError:
+            logging.warning('Singular matrix encountered when conditioning on G2. Cannot calculate inverse. Check your inputs. Using approximate method instead (numpy.linalg.pinv). Result might be inaccurate.')
+            G1tPG2_G2tPG2inv = G1tPG2.dot(np.linalg.pinv(G2tPG2))
 
         # conditional squaredform
         expected_teststat = G1tPG2_G2tPG2inv.dot(G2tPY)
