@@ -13,9 +13,13 @@ While the score test is computationally more efficient, the LRT has potentially 
 
 The score test is available for continuous (:class:`seak.scoretest.ScoretestLogit`) and binary phenotypes (:class:`seak.scoretest.ScoretestNoK`),
 and can correct for (cryptic) relatedness and population stratification using a two random effects model (:class:`seak.scoretest.Scoretest2K`, continuous phenotypes only).
-P-values are calculated using either Davie's exact method :cite:`Davies1980`, or saddle point approximation :cite:`Kuonen1999`.
+P-values are calculated using either Davie's exact method :cite:`Davies1980`, or saddle point approximation :cite:`Kuonen1999` (as implemented in the `skatMeta R-package <https://github.com/cran/skatMeta>`_).
 
-The LRT is implemented for continuous phenotypes (:class:`seak.lrt.LRTnoK`).  LRT test statistics can be sampled using the fast implementations described in :cite:`Scheipl2008`.
+The LRT is implemented for continuous phenotypes (:class:`seak.lrt.LRTnoK`).  LRT test statistics can be sampled using the fast implementations described in :cite:`Scheipl2008`. This class also provides support for gene-specific hypothesis testing, using a combination of the approaches outlined in :cite:`zhou2016boosting`, :cite:`Lippert2014` and :cite:`Listgarten2013`.
+
+The module :mod:`seak.cct` implements the Cauchy Combination Test (CCT, :cite:`liu2020cauchy`), as implemented in the `STAAR R-package <https://github.com/xihaoli/STAAR>`_.
+
+If you use the functions in the modules listed above, please also cite the original authors.
 
 Seak provides interfaces for data loading functionalities (:mod:`seak.data_loaders`) in order to maximize flexibility. This way users can easily adapt the package to the input data types of their choice.
 

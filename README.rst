@@ -37,3 +37,5 @@ Listgarten, J., Lippert, C., Kang, E. Y., Xiang, J., Kadie, C. M., & Heckerman, 
 `RLRsim <https://cran.r-project.org/web/packages/RLRsim/RLRsim.pdf>`_
 
 Scheipl, Fabian, Sonja Greven, and Helmut Kuechenhoff. "Size and power of tests for a zero random effect variance or polynomial regression in additive and linear mixed models." Computational statistics & data analysis 52.7 (2008): 3283-3299.
+
+A more complete list of references can be found on `readthedocs <https://seak.readthedocs.io/en/latest/readme.html>`_ .
