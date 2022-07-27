@@ -429,6 +429,7 @@ def RLRTSim(X, Z, Xdagger, sqrtSigma=None, lambda0=np.nan, seed=2020, nsim=10000
                  xi=mu,
                  REML=True)
 
+    res['mu'] = mu
     res['lambda'] = lambda_grid[res['lambdaind']] if 'lambdaind' in res else np.zeros((1,))
 
     return res
