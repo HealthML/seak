@@ -28,14 +28,18 @@ You can find a full documentation of **seak** including an API reference on http
 References
 =============
 
+`seak <https://www.nature.com/articles/s41467-022-32864-2>`_
+
+Check out the link above our Nature Communications paper using `seak`
+
 `FaST-LMM <https://github.com/fastlmm/FaST-LMM>`_.
 
-Lippert, C., Xiang, J., Horta, D., Widmer, C., Kadie, C., Heckerman, D., & Listgarten, J. (2014). Greater power and computational efficiency for kernel-based association testing of sets of genetic variants. *Bioinformatics*, *30*(22), 3206–3214. https://doi.org/10.1093/bioinformatics/btu504
+Lippert, Christoph, et al. "Greater power and computational efficiency for kernel-based association testing of sets of genetic variants." *Bioinformatics* 30.22 (2014): 3206-3214.
 
-Listgarten, J., Lippert, C., Kang, E. Y., Xiang, J., Kadie, C. M., & Heckerman, D. (2013). A powerful and efficient set test for genetic markers that handles confounders. *Bioinformatics*, *29*(12), 1526–1533. https://doi.org/10.1093/bioinformatics/btt177
+Listgarten, Jennifer, et al. "A powerful and efficient set test for genetic markers that handles confounders." *Bioinformatics* 29.12 (2013): 1526-1533.
 
 `RLRsim <https://cran.r-project.org/web/packages/RLRsim/RLRsim.pdf>`_
 
-Scheipl, Fabian, Sonja Greven, and Helmut Kuechenhoff. "Size and power of tests for a zero random effect variance or polynomial regression in additive and linear mixed models." Computational statistics & data analysis 52.7 (2008): 3283-3299.
+Scheipl, Fabian, Sonja Greven, and Helmut Kuechenhoff. "Size and power of tests for a zero random effect variance or polynomial regression in additive and linear mixed models." *Computational statistics & data analysis* 52.7 (2008): 3283-3299.
 
 A more complete list of references can be found on `readthedocs <https://seak.readthedocs.io/en/latest/readme.html>`_ .
