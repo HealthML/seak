@@ -28,9 +28,11 @@ You can find a full documentation of **seak** including an API reference on http
 References
 =============
 
-`seak <https://www.nature.com/articles/s41467-022-32864-2>`_
+Main citation:
 
-Check out the link above our Nature Communications paper using `seak`
+`Identifying interpretable gene-biomarker associations with functionally informed kernel-based tests in 190,000 exomes <https://www.nature.com/articles/s41467-022-32864-2>`_ by Remo Monti, Pia Rautenstrauch, Mahsa Ghanbari, Alva Rani James, Matthias Kirchler, Uwe Ohler, Stefan Konigorski & Christoph Lippert, *Nature Communications*, 2022.
+
+Summary statistics for that study are available on the GWAS catalog, `accession number 36088354 <http://www.ebi.ac.uk/gwas/publications/36088354>`_. 
 
 `FaST-LMM <https://github.com/fastlmm/FaST-LMM>`_.
 
